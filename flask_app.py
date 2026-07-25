@@ -602,42 +602,57 @@ def api_extract():
         if not raw_url:
             return jsonify({"success": False, "error": "⚠️ Please provide a valid link!"})
 
+        # Safe and robust format selection for yt-dlp
         if quality == 'audio':
-            ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'no_warnings': True}
+            format_selector = 'bestaudio/best'
         elif quality == '360':
-            ydl_opts = {'format': 'best[height<=360]/best', 'quiet': True, 'no_warnings': True}
+            format_selector = 'best[height<=360]/best'
         elif quality == '480':
-            ydl_opts = {'format': 'best[height<=480]/best', 'quiet': True, 'no_warnings': True}
+            format_selector = 'best[height<=480]/best'
         elif quality == '720':
-            ydl_opts = {'format': 'best[height<=720]/best', 'quiet': True, 'no_warnings': True}
+            format_selector = 'best[height<=720]/best'
         elif quality == '1080':
-            ydl_opts = {'format': 'best[height<=1080]/best', 'quiet': True, 'no_warnings': True}
+            format_selector = 'best[height<=1080]/best'
         elif quality == '1440':
-            ydl_opts = {'format': 'best[height<=1440]/best', 'quiet': True, 'no_warnings': True}
+            format_selector = 'best[height<=1440]/best'
         elif quality == '2160':
-            ydl_opts = {'format': 'best[height<=2160]/best', 'quiet': True, 'no_warnings': True}
+            format_selector = 'best[height<=2160]/best'
         else:
-            ydl_opts = {'format': 'best/bestvideo+bestaudio', 'quiet': True, 'no_warnings': True}
+            format_selector = 'best/bestvideo+bestaudio'
+
+        ydl_opts = {
+            'format': format_selector,
+            'quiet': True,
+            'no_warnings': True,
+            'ignoreerrors': True,
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
+        }
 
         download_url = None
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(raw_url, download=False)
+            if not info:
+                return jsonify({"success": False, "error": "❌ Failed to extract video info."})
+            
             download_url = info.get('url')
             
             if not download_url and 'formats' in info:
-                for f in reversed(info['formats']):
-                    if f.get('url'):
+                formats = info['formats']
+                for f in reversed(formats):
+                    if f.get('url') and f.get('vcodec') != 'none':
                         download_url = f.get('url')
                         break
+                if not download_url and formats:
+                    download_url = formats[-1].get('url')
 
         if download_url:
             return jsonify({"success": True, "download_url": download_url})
         else:
-            return jsonify({"success": False, "error": "❌ Unable to fetch stream. Direct link not found."})
+            return jsonify({"success": False, "error": "❌ Unable to fetch stream. Link might be restricted."})
 
     except Exception as e:
-        return jsonify({"success": False, "error": "❌ Extraction failed. Please check the link."})
-
+        return jsonify({"success": False, "error": "❌ Extraction failed. Please try a different link."})
+        
 @app.route('/admin/add-folder', methods=['POST'])
 def add_folder():
     try:
