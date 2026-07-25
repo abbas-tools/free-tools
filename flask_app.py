@@ -235,15 +235,17 @@ HTML_TEMPLATE = """
             font-size: 12px;
         }
         .download-btn {
-            background: #00a8ff;
-            color: white;
-            padding: 10px 20px;
+            background: #00d2ff;
+            color: #000;
+            padding: 12px 20px;
             text-decoration: none;
-            border-radius: 6px;
-            display: inline-block;
+            border-radius: 8px;
+            display: block;
             font-weight: bold;
             font-size: 14px;
             margin-top: 8px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 210, 255, 0.3);
         }
         .subscribe-box {
             background: rgba(255, 255, 255, 0.05);
@@ -301,7 +303,7 @@ HTML_TEMPLATE = """
 
         <div id="downloader-tab" class="tab-content active">
             <div class="card">
-                <input type="text" id="videoUrl" placeholder="Paste video link here...">
+                <input type="text" id="videoUrl" placeholder="Paste YouTube link here...">
                 <select id="qualitySelect">
                     <option value="best" selected>🎬 Best Quality (Video)</option>
                     <option value="480">📱 480p (Medium)</option>
@@ -373,67 +375,72 @@ HTML_TEMPLATE = """
             let downloadBtn = document.getElementById('downloadBtn');
 
             if (!url) {
-                resultDiv.innerHTML = '<div class="error-box">⚠️ Please paste a valid video link!</div>';
+                resultDiv.innerHTML = '<div class="error-box">⚠️ Please paste a valid YouTube link!</div>';
                 return;
             }
 
             downloadBtn.disabled = true;
             downloadBtn.textContent = 'Processing...';
-            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Fetching direct link safely...</div>';
+            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Connecting via client IP...</div>';
 
             try {
-                let apiEndpoints = [
-                    "https://co.wuk.sh/api/json",
-                    "https://cobalt.kwiatekmichal.pl/api/json"
-                ];
-                
-                let successData = null;
+                let payload = {
+                    url: url,
+                    vQuality: quality === 'best' ? 'max' : quality,
+                    isAudioOnly: quality === 'audio',
+                    dubLang: false
+                };
 
-                for (let endpoint of apiEndpoints) {
+                // Official and highly stable public endpoints that execute via user client context
+                let apis = [
+                    "https://api.cobalt.tools/api/json",
+                    "https://co.wuk.sh/api/json"
+                ];
+
+                let downloadUrl = null;
+
+                for (let api of apis) {
                     try {
-                        let response = await fetch(endpoint, {
+                        let response = await fetch(api, {
                             method: "POST",
                             headers: {
                                 "Accept": "application/json",
-                                "Content-Type": "application/json"
+                                "Content-Type": "application/json",
+                                "User-Agent": navigator.userAgent
                             },
-                            body: JSON.stringify({
-                                url: url,
-                                vQuality: quality === 'best' ? 'max' : quality,
-                                isAudioOnly: quality === 'audio'
-                            })
+                            body: JSON.stringify(payload)
                         });
 
-                        let resJson = await response.json();
-                        if (resJson && (resJson.url || resJson.picker)) {
-                            successData = resJson;
-                            break;
+                        let data = await response.json();
+                        if (data) {
+                            if (data.url) {
+                                downloadUrl = data.url;
+                                break;
+                            } else if (data.picker && data.picker.length > 0) {
+                                downloadUrl = data.picker[0].url;
+                                break;
+                            } else if (data.status === "redirect" && data.url) {
+                                downloadUrl = data.url;
+                                break;
+                            }
                         }
                     } catch (e) {
                         continue;
                     }
                 }
 
-                if (successData) {
-                    let downloadUrl = successData.url || (successData.picker && successData.picker[0].url);
-                    if (downloadUrl) {
-                        resultDiv.innerHTML = `
-                            <div class="success-box">
-                                <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ Media Ready!</b>
-                                <a href="${downloadUrl}" class="download-btn" target="_blank">⬇️ Click to Save File</a>
-                            </div>`;
-                        return;
-                    }
+                if (downloadUrl) {
+                    resultDiv.innerHTML = `
+                        <div class="success-box">
+                            <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ Link Extracted Successfully!</b>
+                            <a href="${downloadUrl}" class="download-btn" target="_blank">⬇️ Download File Now</a>
+                        </div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error-box">❌ Unable to fetch stream. Please ensure the YouTube link is public and correct.</div>`;
                 }
 
-                resultDiv.innerHTML = `
-                    <div class="success-box">
-                        <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ Stream Available</b>
-                        <a href="${url}" class="download-btn" target="_blank">▶️ Open & Save Stream</a>
-                    </div>`;
-
             } catch (err) {
-                resultDiv.innerHTML = `<div class="error-box">❌ Network error. Please try again!</div>`;
+                resultDiv.innerHTML = `<div class="error-box">❌ Network error occurred. Please check your connection.</div>`;
             } finally {
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = 'Download Now 🚀';
