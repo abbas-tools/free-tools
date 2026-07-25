@@ -2,12 +2,16 @@ import os
 import re
 import uuid
 import json
+import random
+import time
 import requests
 import telebot
 import yt_dlp
+from urllib3.util import Retry
+from requests.adapters import HTTPAdapter
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION & FIREWALL SHIELD ---
 TOKEN = "8781601945:AAG6Anvk8DaRZnhS5kNm61srVJec1-ECLcw"
 bot = telebot.TeleBot(TOKEN, threaded=False)
 app = Flask(__name__)
@@ -18,6 +22,20 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 DB_FILE = 'database.json'
+
+# Robust requests session with automatic retries and adapters
+session = requests.Session()
+retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+session.mount('https://', HTTPAdapter(max_retries=retries))
+session.mount('http://', HTTPAdapter(max_retries=retries))
+
+# Anti-bot User-Agent pool for firewall bypass
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15',
+    'Mozilla/5.0 (Linux; Android 14; Moto Edge 2024) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'
+]
 
 def load_database():
     if os.path.exists(DB_FILE):
@@ -50,8 +68,6 @@ def save_database(data):
             json.dump(data, f, ensure_ascii=False, indent=4)
     except:
         pass
-
-CRICKET_DATABASE = load_database()
 
 AD_FRAME_TEMPLATE = """
 <!DOCTYPE html>
@@ -364,11 +380,8 @@ HTML_TEMPLATE = """
                 <select id="qualitySelect">
                     <option value="max" selected>🎬 Best Quality (Max)</option>
                     <option value="360">📱 360p (Low)</option>
-                    <option value="480">📱 480p (Medium)</option>
                     <option value="720">💻 720p (HD)</option>
                     <option value="1080">🖥️ 1080p (Full HD)</option>
-                    <option value="1440">📽️ 1440p (2K)</option>
-                    <option value="2160">📺 2160p (4K Ultra HD)</option>
                     <option value="audio">🎵 Audio Only (MP3)</option>
                 </select>
                 <button class="btn" id="downloadBtn" onclick="processDownload()">Download Now 🚀</button>
@@ -441,7 +454,7 @@ HTML_TEMPLATE = """
 
             downloadBtn.disabled = true;
             downloadBtn.textContent = 'Processing...';
-            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Extracting stream link via yt-dlp...</div>';
+            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Fetching direct stream link...</div>';
 
             try {
                 let response = await fetch('/api/extract', {
@@ -603,70 +616,55 @@ def api_extract():
             return jsonify({"success": False, "error": "⚠️ Please provide a valid link!"})
 
         download_url = None
+        headers = {'User-Agent': random.choice(USER_AGENTS)}
 
-        # Method 1: Try using yt-dlp with multiple client emulations
+        # Engine 1: Secure Session API Fallback with dynamic headers
         try:
-            if quality == 'audio':
-                format_selector = 'bestaudio/best'
-            elif quality == '360':
-                format_selector = 'best[height<=360]/best'
-            elif quality == '480':
-                format_selector = 'best[height<=480]/best'
-            elif quality == '720':
-                format_selector = 'best[height<=720]/best'
-            elif quality == '1080':
-                format_selector = 'best[height<=1080]/best'
-            elif quality == '1440':
-                format_selector = 'best[height<=1440]/best'
-            elif quality == '2160':
-                format_selector = 'best[height<=2160]/best'
-            else:
-                format_selector = 'best/bestvideo+bestaudio'
-
-            ydl_opts = {
-                'format': format_selector,
-                'quiet': True,
-                'no_warnings': True,
-                'ignoreerrors': True,
-                'extractor_args': {'youtube': {'player_client': ['android', 'web', 'mweb']}}
-            }
-
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(raw_url, download=False)
-                if info:
-                    download_url = info.get('url')
-                    if not download_url and 'formats' in info:
-                        for f in reversed(info['formats']):
-                            if f.get('url') and f.get('vcodec') != 'none':
-                                download_url = f.get('url')
-                                break
-        except Exception as e:
+            api_endpoint = f"https://tikwm.com/api/?url={raw_url}"
+            res = session.get(api_endpoint, headers=headers, timeout=8)
+            res_data = res.json()
+            if res_data.get('code') == 0:
+                download_url = res_data.get('data', {}).get('play')
+        except:
             pass
 
-        # Method 2: Fallback to Cobweb / Cobalt public API if yt-dlp fails due to Railway IP block
+        # Engine 2: All-in-one loader proxy mirror
         if not download_url:
             try:
-                headers = {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-                }
                 payload = {'url': raw_url}
-                res = requests.post('https://co.wuk.sh/api/json', json=payload, headers=headers, timeout=10)
-                res_data = res.json()
-                if res_data.get('status') == 'redirect' or res_data.get('status') == 'stream':
-                    download_url = res_data.get('url')
-            except Exception as e:
+                custom_headers = {'Content-Type': 'application/json', 'User-Agent': random.choice(USER_AGENTS)}
+                r = session.post('https://co.wuk.sh/api/json', json=payload, headers=custom_headers, timeout=8)
+                r_data = r.json()
+                if r_data.get('status') in ['redirect', 'stream']:
+                    download_url = r_data.get('url')
+            except:
+                pass
+
+        # Engine 3: yt-dlp deep multi-client spoofing
+        if not download_url:
+            try:
+                time.sleep(0.5)
+                ydl_opts = {
+                    'format': 'best/bestvideo+bestaudio',
+                    'quiet': True,
+                    'no_warnings': True,
+                    'extractor_args': {'youtube': {'player_client': ['ios', 'android', 'web']}}
+                }
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(raw_url, download=False)
+                    if info:
+                        download_url = info.get('url')
+            except:
                 pass
 
         if download_url:
             return jsonify({"success": True, "download_url": download_url})
         else:
-            return jsonify({"success": False, "error": "❌ YouTube is blocking cloud server requests. Try a different video link."})
+            return jsonify({"success": False, "error": "❌ Could not bypass platform restriction. Try another video link."})
 
     except Exception as e:
-        return jsonify({"success": False, "error": "❌ Extraction failed. Please try again."})
-        
+        return jsonify({"success": False, "error": "❌ Extraction failed."})
+
 @app.route('/admin/add-folder', methods=['POST'])
 def add_folder():
     try:
