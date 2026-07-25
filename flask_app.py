@@ -1,4 +1,5 @@
 import os
+import requests
 import telebot
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for
 import yt_dlp
@@ -14,7 +15,7 @@ UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# In-memory database simulation for Cricket Profiles & Videos (Can be replaced with SQLite/JSON)
+# In-memory database simulation for Cricket Profiles & Videos
 CRICKET_DATABASE = {
     "babar-azam": {
         "name": "Babar Azam 👑",
@@ -347,10 +348,13 @@ HTML_TEMPLATE = """
             .then(response => response.json())
             .then(data => {
                 if(data.success) {
+                    let safeTitle = encodeURIComponent(data.title.replace(/[^a-zA-Z0-9]/g, '_'));
+                    let proxyLink = `/proxy-download?url=${encodeURIComponent(data.download_link)}&title=${safeTitle}`;
+                    
                     resultDiv.innerHTML = `
                         <div style="background: rgba(0,255,0,0.1); padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid rgba(0,255,0,0.2);">
                             <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">${data.title}</b>
-                            <a href="${data.download_link}" target="_blank" style="background: #00a8ff; color: white; padding: 8px 15px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 13px;">Click to Save File 🚀</a>
+                            <a href="${proxyLink}" style="background: #00a8ff; color: white; padding: 8px 15px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 13px;">Click to Save File 🚀</a>
                         </div>`;
                 } else {
                     resultDiv.innerHTML = `<span style="color: #e84118; font-size: 13px;">Error: ${data.message}</span>`;
@@ -389,6 +393,28 @@ def upload_video():
         })
 
     return redirect(url_for('home'))
+
+@app.route('/proxy-download')
+def proxy_download():
+    video_url = request.args.get('url')
+    filename = request.args.get('title', 'video') + '.mp4'
+    if not video_url:
+        return "URL is required", 400
+    
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        r = requests.get(video_url, headers=headers, stream=True)
+        
+        def generate():
+            for chunk in r.iter_content(chunk_size=4096):
+                yield chunk
+                
+        return app.response_class(generate(), headers={
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Content-Type': r.headers.get('content-type', 'video/mp4')
+        })
+    except Exception as e:
+        return str(e), 500
 
 @app.route('/process-media', methods=['POST'])
 def process_media():
