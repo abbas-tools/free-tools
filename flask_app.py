@@ -17,6 +17,7 @@ UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Dictionary to hold players and their folders
 CRICKET_DATABASE = {
     "babar-azam": {
         "name": "Babar Azam 👑",
@@ -84,20 +85,23 @@ HTML_TEMPLATE = """
         }
         .nav-tabs {
             display: flex;
-            justify-content: space-around;
+            justify-content: center;
+            gap: 10px;
             background: rgba(255,255,255,0.06);
             border-radius: 12px;
-            padding: 5px;
+            padding: 6px;
             margin-bottom: 15px;
         }
         .nav-tab {
-            padding: 8px 12px;
-            font-size: 12px;
+            flex: 1;
+            padding: 10px;
+            font-size: 13px;
             font-weight: bold;
             color: #aaa;
             cursor: pointer;
             border-radius: 8px;
             transition: 0.2s;
+            text-align: center;
         }
         .nav-tab.active {
             background: linear-gradient(135deg, #ff416c, #ff4b2b);
@@ -170,7 +174,7 @@ HTML_TEMPLATE = """
             background: rgba(255,255,255,0.03);
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 12px;
-            padding: 12px;
+            padding: 14px;
             margin-bottom: 12px;
             text-align: left;
         }
@@ -178,9 +182,12 @@ HTML_TEMPLATE = """
             margin: 0 0 4px 0;
             color: #ff4b2b;
             font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .cricket-profile p {
-            margin: 0 0 8px 0;
+            margin: 0 0 10px 0;
             font-size: 11px;
             opacity: 0.8;
         }
@@ -275,7 +282,6 @@ HTML_TEMPLATE = """
         <div class="nav-tabs">
             <div class="nav-tab active" onclick="switchTab('downloader')">Downloader</div>
             <div class="nav-tab" onclick="switchTab('cricket')">📁 Cricket Folders</div>
-            <div class="nav-tab" onclick="switchTab('upload')">📤 Upload Video</div>
         </div>
 
         <div id="downloader-tab" class="tab-content active">
@@ -294,13 +300,13 @@ HTML_TEMPLATE = """
         </div>
 
         <div id="cricket-tab" class="tab-content">
-            <div class="card" style="max-height: 380px; overflow-y: auto;">
-                <h3 style="margin-top:0; font-size:15px; color:#ff4b2b;">📂 Cricketer Gallery Folders</h3>
+            <div class="card" style="max-height: 400px; overflow-y: auto;">
+                <h3 style="margin-top:0; font-size:15px; color:#ff4b2b;">📂 Players Gallery Folders</h3>
                 {% for key, profile in cricketers.items() %}
                 <div class="cricket-profile">
-                    <h4>📁 {{ profile.name }}</h4>
+                    <h4><i class="fa-solid fa-folder-open" style="color:#f1c40f;"></i> {{ profile.name }}</h4>
                     <p>{{ profile.bio }}</p>
-                    <div style="font-size:11px; font-weight:bold; opacity:0.7; margin-bottom:4px;">Available Videos:</div>
+                    <div style="font-size:11px; font-weight:bold; opacity:0.7; margin-bottom:4px;">Videos Available:</div>
                     {% if profile.videos %}
                         {% for vid in profile.videos %}
                         <div class="video-item">
@@ -309,27 +315,10 @@ HTML_TEMPLATE = """
                         </div>
                         {% endfor %}
                     {% else %}
-                        <div style="font-size: 11px; opacity: 0.5; font-style: italic;">No videos uploaded in this folder yet.</div>
+                        <div style="font-size: 11px; opacity: 0.5; font-style: italic;">No videos in this folder yet.</div>
                     {% endif %}
                 </div>
                 {% endfor %}
-            </div>
-        </div>
-
-        <div id="upload-tab" class="tab-content">
-            <div class="card">
-                <h3 style="margin-top:0; font-size:16px; color:#ff4b2b;">📤 Upload to Gallery Folder</h3>
-                <form action="/upload-video" method="POST" enctype="multipart/form-data">
-                    <select name="cricketer_key" required>
-                        <option value="">Select Folder (Cricketer)</option>
-                        {% for key, profile in cricketers.items() %}
-                        <option value="{{ key }}">📁 {{ profile.name }}</option>
-                        {% endfor %}
-                    </select>
-                    <input type="text" name="video_title" placeholder="Enter Video Title..." required>
-                    <input type="file" name="video_file" accept="video/*" required>
-                    <button type="submit" class="btn">Upload to Folder 🚀</button>
-                </form>
             </div>
         </div>
 
@@ -353,9 +342,6 @@ HTML_TEMPLATE = """
             } else if(tabName === 'cricket') {
                 document.querySelectorAll('.nav-tab')[1].classList.add('active');
                 document.getElementById('cricket-tab').classList.add('active');
-            } else if(tabName === 'upload') {
-                document.querySelectorAll('.nav-tab')[2].classList.add('active');
-                document.getElementById('upload-tab').classList.add('active');
             }
         }
 
@@ -406,6 +392,101 @@ HTML_TEMPLATE = """
 </html>
 """
 
+ADMIN_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Badass Tools Hub</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 450px;
+            margin: auto;
+            background: rgba(255, 255, 255, 0.04);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            text-align: left;
+        }
+        h2 { color: #ff4b2b; text-align: center; margin-top: 0; }
+        h3 { color: #f1c40f; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; }
+        input[type="text"], select, input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+            outline: none;
+        }
+        .btn {
+            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+            color: #ffffff;
+            border: none;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 15px;
+            color: #00a8ff;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🛠️ Admin Panel</h2>
+
+        <h3>➕ Create New Player Folder</h3>
+        <form action="/admin/add-folder" method="POST">
+            <input type="text" name="player_name" placeholder="Player Name (e.g. MS Dhoni 🇮🇳)" required>
+            <input type="text" name="player_bio" placeholder="Short Bio / Description" required>
+            <button type="submit" class="btn" style="background: linear-gradient(135deg, #00b09b, #96c93d);">Create Folder 📂</button>
+        </form>
+
+        <h3>📤 Upload Video to Folder</h3>
+        <form action="/admin/upload-video" method="POST" enctype="multipart/form-data">
+            <select name="cricketer_key" required>
+                <option value="">Select Player Folder</option>
+                {% for key, profile in cricketers.items() %}
+                <option value="{{ key }}">📁 {{ profile.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="video_title" placeholder="Enter Video Title..." required>
+            <input type="file" name="video_file" accept="video/*" required>
+            <button type="submit" class="btn">Upload Video 🚀</button>
+        </form>
+
+        <a href="/" class="back-link">⬅️ Back to Public Website</a>
+    </div>
+</body>
+</html>
+"""
+
 def is_valid_url(url):
     try:
         result = urlparse(url)
@@ -421,15 +502,36 @@ def sanitize_filename(filename):
 def home():
     return render_template_string(HTML_TEMPLATE, cricketers=CRICKET_DATABASE)
 
-@app.route('/upload-video', methods=['POST'])
-def upload_video():
+@app.route('/admin-panel')
+def admin_panel():
+    return render_template_string(ADMIN_TEMPLATE, cricketers=CRICKET_DATABASE)
+
+@app.route('/admin/add-folder', methods=['POST'])
+def add_folder():
+    try:
+        name = request.form.get('player_name', '').strip()
+        bio = request.form.get('player_bio', '').strip()
+        if name:
+            key = sanitize_filename(name).lower()
+            if key not in CRICKET_DATABASE:
+                CRICKET_DATABASE[key] = {
+                    "name": name,
+                    "bio": bio,
+                    "videos": []
+                }
+        return redirect(url_for('admin_panel'))
+    except:
+        return redirect(url_for('admin_panel'))
+
+@app.route('/admin/upload-video', methods=['POST'])
+def admin_upload_video():
     try:
         cricketer_key = request.form.get('cricketer_key')
         video_title = request.form.get('video_title')
         video_file = request.files.get('video_file')
 
         if not cricketer_key or not video_file or cricketer_key not in CRICKET_DATABASE:
-            return redirect(url_for('home'))
+            return redirect(url_for('admin_panel'))
 
         filename = f"{uuid.uuid4().hex}_{sanitize_filename(video_file.filename)}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -439,9 +541,9 @@ def upload_video():
             "title": video_title,
             "url": f"/static/uploads/{filename}"
         })
-        return redirect(url_for('home'))
-    except Exception as e:
-        return redirect(url_for('home'))
+        return redirect(url_for('admin_panel'))
+    except:
+        return redirect(url_for('admin_panel'))
 
 @app.route('/proxy-download')
 def proxy_download():
