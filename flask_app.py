@@ -252,10 +252,6 @@ HTML_TEMPLATE = """
 """
 
 # --- WEB APP ROUTES ---
-@app.route('/')
-def home():
-    return render_template_string(HTML_TEMPLATE)
-
 @app.route('/process-media', methods=['POST'])
 def process_media():
     data = request.json
@@ -266,7 +262,6 @@ def process_media():
         return jsonify({'success': False, 'message': 'URL is required'})
 
     try:
-        # --- Yahan par ydl_opts mein headers aur bypass options add karne hain ---
         common_headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -316,18 +311,6 @@ def process_media():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)[:120]})
         
-        if not download_url:
-            return jsonify({'success': False, 'message': 'Could not extract direct link for this quality.'})
-
-        return jsonify({
-            'success': True,
-            'title': title,
-            'download_link': download_url
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)[:120]})
-
-
 # --- TELEGRAM WEBHOOK ENDPOINT (24/7 Background Handler) ---
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
