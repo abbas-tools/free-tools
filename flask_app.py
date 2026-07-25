@@ -120,6 +120,8 @@ HTML_TEMPLATE = """
             border: 1px solid rgba(255, 255, 255, 0.08);
             margin-bottom: 15px;
             text-align: left;
+            position: relative;
+            z-index: 2;
         }
         input[type="text"], select, input[type="file"] {
             width: 100%;
@@ -144,6 +146,8 @@ HTML_TEMPLATE = """
             cursor: pointer;
             width: 100%;
             box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4);
+            position: relative;
+            z-index: 3;
         }
         .btn:disabled {
             opacity: 0.6;
@@ -217,6 +221,8 @@ HTML_TEMPLATE = """
             min-height: 50px;
             overflow: hidden;
             border-radius: 8px;
+            position: relative;
+            z-index: 1;
         }
         .success-box {
             background: rgba(0,255,0,0.1);
@@ -246,6 +252,8 @@ HTML_TEMPLATE = """
             margin-top: 8px;
             text-align: center;
             box-shadow: 0 4px 12px rgba(0, 210, 255, 0.3);
+            position: relative;
+            z-index: 3;
         }
         .subscribe-box {
             background: rgba(255, 255, 255, 0.05);
@@ -391,7 +399,6 @@ HTML_TEMPLATE = """
                     dubLang: false
                 };
 
-                // Official and highly stable public endpoints that execute via user client context
                 let apis = [
                     "https://api.cobalt.tools/api/json",
                     "https://co.wuk.sh/api/json"
