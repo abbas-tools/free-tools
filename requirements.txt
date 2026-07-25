@@ -1,4 +1,6 @@
-flask
-pyTelegramBotAPI
-yt_dlp
+Flask
 gunicorn
+requests
+TeleBot
+yt-dlp
+playwright
