@@ -34,6 +34,41 @@ CRICKET_DATABASE = {
     }
 }
 
+# --- ISOLATED AD DOCUMENT ROUTE ---
+AD_FRAME_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            width: 320px;
+            height: 50px;
+        }
+    </style>
+</head>
+<body>
+    <script type="text/javascript">
+        atOptions = {
+            'key' : '03b4a64917d99a52eb71ea7bea6414d6',
+            'format' : 'iframe',
+            'height' : 50,
+            'width' : 320,
+            'params' : {}
+        };
+    </script>
+    <script type="text/javascript" src="//www.highperformanceformat.com/03b4a64917d99a52eb71ea7bea6414d6/invoke.js"></script>
+</body>
+</html>
+"""
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -221,8 +256,13 @@ HTML_TEMPLATE = """
             min-height: 50px;
             overflow: hidden;
             border-radius: 8px;
-            position: relative;
-            z-index: 1;
+            background: rgba(0,0,0,0.2);
+        }
+        .banner-ad iframe {
+            width: 320px;
+            height: 50px;
+            border: none;
+            overflow: hidden;
         }
         .success-box {
             background: rgba(0,255,0,0.1);
@@ -291,18 +331,9 @@ HTML_TEMPLATE = """
         <h2>NexGen Downloader ⚡</h2>
         <div class="subtitle">Ultimate Media Stream Grabber</div>
 
-        <div class="banner-ad" id="adContainer">
-            <!-- Safe Sandbox Protection for Ads -->
-            <script type="text/javascript">
-                atOptions = {
-                    'key' : '03b4a64917d99a52eb71ea7bea6414d6',
-                    'format' : 'iframe',
-                    'height' : 50,
-                    'width' : 320,
-                    'params' : {}
-                };
-            </script>
-            <script type="text/javascript" src="//www.highperformanceformat.com/03b4a64917d99a52eb71ea7bea6414d6/invoke.js"></script>
+        <div class="banner-ad">
+            <!-- Strictly Sandboxed Isolated Frame loading separate safe route -->
+            <iframe src="/banner-ad" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
         </div>
 
         <div class="nav-tabs">
@@ -364,15 +395,6 @@ HTML_TEMPLATE = """
         let tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Anti-Redirect Protection: Prevent popunders and unwanted history stack pollution
-        window.addEventListener('beforeunload', function (e) {
-            // Allows normal operations but neutralizes background hijacking
-        });
-
-        // Intercept unwanted top-level window location changes injected by ads
-        const originalAssign = window.location.assign;
-        // Keep main app intact
-        
         function switchTab(tabName) {
             document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -570,6 +592,10 @@ def sanitize_filename(filename):
 @app.route('/')
 def home():
     return render_template_string(HTML_TEMPLATE, cricketers=CRICKET_DATABASE)
+
+@app.route('/banner-ad')
+def banner_ad():
+    return render_template_string(AD_FRAME_TEMPLATE)
 
 @app.route('/admin-panel')
 def admin_panel():
