@@ -2,8 +2,7 @@ import os
 import re
 import requests
 import telebot
-import yt_dlp
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, Response, request_started
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, Response
 import uuid
 from urllib.parse import urlparse
 
@@ -305,11 +304,11 @@ HTML_TEMPLATE = """
             <div class="card">
                 <input type="text" id="videoUrl" placeholder="Paste video link here...">
                 <select id="qualitySelect">
-                    <option value="best">🎬 Best Quality (Video)</option>
-                    <option value="480" selected>📱 480p (Medium)</option>
+                    <option value="best" selected>🎬 Best Quality (Video)</option>
+                    <option value="480">📱 480p (Medium)</option>
                     <option value="720">💻 720p (HD)</option>
                     <option value="1080">🖥️ 1080p (Full HD)</option>
-                    <option value="audio">🎵 Audio Only (MP3/M4A)</option>
+                    <option value="audio">🎵 Audio Only (MP3)</option>
                 </select>
                 <button class="btn" id="downloadBtn" onclick="processDownload()">Download Now 🚀</button>
                 <div id="result"></div>
@@ -395,7 +394,7 @@ HTML_TEMPLATE = """
                     resultDiv.innerHTML = `
                         <div class="success-box">
                             <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ ${data.title}</b>
-                            <div style="font-size: 11px; color: #aaa; margin: 5px 0;">📊 Quality: ${data.resolution}</div>
+                            <div style="font-size: 11px; color: #aaa; margin: 5px 0;">📊 Status: Ready to Save</div>
                             <a href="${proxyLink}" class="download-btn">⬇️ Click to Save File</a>
                         </div>`;
                 } else {
@@ -582,7 +581,7 @@ def proxy_download():
             video_url = requests.utils.unquote(video_url)
             
         safe_filename = sanitize_filename(filename)
-        extension = '.mp4' if media_type == 'video' else '.mp3'
+        extension = '.mp3' if media_type == 'audio' else '.mp4'
         
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
         response = requests.get(video_url, headers=headers, stream=True, timeout=60, allow_redirects=True)
@@ -610,60 +609,40 @@ def process_media():
         if not video_url or not is_valid_url(video_url):
             return jsonify({'success': False, 'message': 'Invalid URL format'})
 
-        if quality == 'audio':
-            format_spec = 'bestaudio/best'
-        elif quality == 'best':
-            format_spec = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-        else:
-            height = quality.replace('p', '')
-            format_spec = f'bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]/best[height<={height}]/best'
+        # Using Cobalt public API service to completely bypass server-side IP bot blocks from YouTube
+        api_payload = {
+            "url": video_url,
+            "vQuality": "1080" if quality == "1080" else ("720" if quality == "720" else "480"),
+            "isAudioOnly": True if quality == "audio" else False
+        }
         
-        # Clean yt-dlp config without faulty proxy bindings
-        ydl_opts = {
-            'format': format_spec,
-            'quiet': True,
-            'no_warnings': True,
-            'nocheckcertificate': True,
-            'socket_timeout': 30,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['mweb', 'android', 'web']
-                }
-            },
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-us,en;q=0.5',
-            }
+        api_headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"
         }
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=False)
-            if not info:
-                return jsonify({'success': False, 'message': 'Could not extract video info'})
+        response = requests.post("https://api.cobalt.tools/api/json", json=api_payload, headers=api_headers, timeout=20)
+        res_json = response.json()
+
+        if response.status_code == 200 and ('url' in res_json or 'picker' in res_json):
+            download_url = res_json.get('url')
+            if not download_url and 'picker' in res_json and len(res_json['picker']) > 0:
+                download_url = res_json['picker'][0].get('url')
             
-            download_url = info.get('url')
-            if not download_url and info.get('formats'):
-                for f in info.get('formats', []):
-                    if f.get('ext') in ['mp4', 'm4a'] and f.get('url'):
-                        download_url = f.get('url')
-                        break
-            
-            if not download_url:
-                return jsonify({'success': False, 'message': 'No downloadable URL found'})
-            
-            return jsonify({
-                'success': True,
-                'title': info.get('title', 'Media File'),
-                'download_link': download_url,
-                'resolution': f"{quality}p" if quality not in ['best', 'audio'] else 'Best',
-                'type': 'audio' if quality == 'audio' else 'video'
-            })
+            if download_url:
+                return jsonify({
+                    'success': True,
+                    'title': 'YouTube Media File',
+                    'download_link': download_url,
+                    'resolution': quality.upper(),
+                    'type': 'audio' if quality == 'audio' else 'video'
+                })
+
+        return jsonify({'success': False, 'message': 'Failed to fetch stream. Try another link.'})
+
     except Exception as e:
-        err_msg = str(e)
-        if "Sign in to confirm" in err_msg or "bot" in err_msg:
-            return jsonify({'success': False, 'message': 'YouTube bot restriction. Try a different link.'})
-        return jsonify({'success': False, 'message': f'Error: {err_msg[:90]}'})
+        return jsonify({'success': False, 'message': 'Error processing video link.'})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
@@ -675,11 +654,7 @@ def webhook():
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    # Automatically detects host domain or falls back to standard Railway app link
-    host_url = request.host_url if hasattr(request, 'host_url') and request.host_url else "https://web-production-6836d.up.railway.app/"
-    if not host_url.startswith('http'):
-        host_url = "https://" + host_url
-        
+    host_url = "https://web-production-6836d.up.railway.app/"
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("⚡ Open Badass Tools Hub", web_app=telebot.types.WebAppInfo(url=host_url)))
     bot.reply_to(message, "Assalamu Alaikum! 🎯 Click below to open app:", reply_markup=markup)
