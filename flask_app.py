@@ -2,9 +2,8 @@ import os
 import re
 import requests
 import telebot
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, Response
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for
 import uuid
-from urllib.parse import urlparse
 
 # --- CONFIGURATION ---
 TOKEN = "8781601945:AAG6Anvk8DaRZnhS5kNm61srVJec1-ECLcw"
@@ -34,7 +33,6 @@ CRICKET_DATABASE = {
     }
 }
 
-# --- ISOLATED AD DOCUMENT ROUTE ---
 AD_FRAME_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -158,7 +156,7 @@ HTML_TEMPLATE = """
             position: relative;
             z-index: 2;
         }
-        input[type="text"], select, input[type="file"] {
+        input[type="text"], select {
             width: 100%;
             padding: 12px;
             border-radius: 10px;
@@ -169,6 +167,10 @@ HTML_TEMPLATE = """
             margin-bottom: 12px;
             box-sizing: border-box;
             outline: none;
+        }
+        select option {
+            background: #1e1b4b;
+            color: #fff;
         }
         .btn {
             background: linear-gradient(135deg, #00d2ff, #3a7bd5);
@@ -320,10 +322,6 @@ HTML_TEMPLATE = """
             opacity: 0.8;
             transition: 0.2s;
         }
-        .social-icons a:hover {
-            opacity: 1;
-            color: #00d2ff;
-        }
     </style>
 </head>
 <body>
@@ -344,10 +342,13 @@ HTML_TEMPLATE = """
             <div class="card">
                 <input type="text" id="videoUrl" placeholder="Paste YouTube, FB, Insta, TikTok link...">
                 <select id="qualitySelect">
-                    <option value="best" selected>🎬 Best Quality (Video)</option>
+                    <option value="max" selected>🎬 Best Quality (Max)</option>
+                    <option value="360">📱 360p (Low)</option>
                     <option value="480">📱 480p (Medium)</option>
                     <option value="720">💻 720p (HD)</option>
                     <option value="1080">🖥️ 1080p (Full HD)</option>
+                    <option value="1440">📽️ 1440p (2K)</option>
+                    <option value="2160">📺 2160p (4K Ultra HD)</option>
                     <option value="audio">🎵 Audio Only (MP3)</option>
                 </select>
                 <button class="btn" id="downloadBtn" onclick="processDownload()">Download Now 🚀</button>
@@ -390,7 +391,7 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-        <script>
+    <script>
         let tg = window.Telegram.WebApp;
         tg.expand();
 
@@ -418,79 +419,32 @@ HTML_TEMPLATE = """
                 return;
             }
 
-            // Advanced Universal Link Clean-up
-            let formattedUrl = rawUrl.split('?')[0]; // Query parameters hataane ke liye
-            
-            if (rawUrl.includes('/shorts/')) {
-                let match = rawUrl.match(/\/shorts\/([A-Za-z0-9_-]+)/);
-                if (match) formattedUrl = `https://www.youtube.com/watch?v=${match[1]}`;
-            } else if (rawUrl.includes('youtu.be/')) {
-                let match = rawUrl.match(/youtu\.be\/([A-Za-z0-9_-]+)/);
-                if (match) formattedUrl = `https://www.youtube.com/watch?v=${match[1]}`;
-            } else if (rawUrl.includes('instagram.com/reel/')) {
-                let match = rawUrl.match(/\/reel\/([A-Za-z0-9_-]+)/);
-                if (match) formattedUrl = `https://www.instagram.com/reel/${match[1]}/`;
-            }
-
             downloadBtn.disabled = true;
             downloadBtn.textContent = 'Processing...';
-            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Extracting stream link...</div>';
+            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Extracting stream link via Server...</div>';
 
             try {
-                let payload = {
-                    url: formattedUrl,
-                    vQuality: quality === 'best' ? 'max' : quality,
-                    isAudioOnly: quality === 'audio'
-                };
+                let response = await fetch('/api/extract', {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        url: rawUrl,
+                        quality: quality
+                    })
+                });
 
-                // Multiple backup APIs for robust extraction
-                let apis = [
-                    "https://api.cobalt.tools/api/json",
-                    "https://co.wuk.sh/api/json",
-                    "https://cobalt.api.undenined.com/api/json"
-                ];
+                let data = await response.json();
 
-                let downloadUrl = null;
-
-                for (let api of apis) {
-                    try {
-                        let response = await fetch(api, {
-                            method: "POST",
-                            headers: {
-                                "Accept": "application/json",
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify(payload)
-                        });
-
-                        if (response.ok) {
-                            let data = await response.json();
-                            if (data) {
-                                if (data.url) {
-                                    downloadUrl = data.url;
-                                    break;
-                                } else if (data.picker && data.picker.length > 0) {
-                                    downloadUrl = data.picker[0].url;
-                                    break;
-                                } else if (data.status === "redirect" && data.url) {
-                                    downloadUrl = data.url;
-                                    break;
-                                }
-                            }
-                        }
-                    } catch (err) {
-                        continue; // Agli API try karega agar yeh fail hui
-                    }
-                }
-
-                if (downloadUrl) {
+                if (data.success && data.download_url) {
                     resultDiv.innerHTML = `
                         <div class="success-box">
                             <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ Link Extracted Successfully!</b>
-                            <a href="${downloadUrl}" class="download-btn" target="_blank">⬇️ Download File Now</a>
+                            <a href="${data.download_url}" class="download-btn" target="_blank">⬇️ Download File Now</a>
                         </div>`;
                 } else {
-                    resultDiv.innerHTML = `<div class="error-box">❌ Unable to fetch stream. The video might be private, geo-restricted, or unsupported.</div>`;
+                    resultDiv.innerHTML = `<div class="error-box">${data.error || '❌ Unable to fetch stream. The link might be invalid or unsupported.'}</div>`;
                 }
 
             } catch (err) {
@@ -615,6 +569,63 @@ def banner_ad():
 @app.route('/admin-panel')
 def admin_panel():
     return render_template_string(ADMIN_TEMPLATE, cricketers=CRICKET_DATABASE)
+
+@app.route('/api/extract', methods=['POST'])
+def api_extract():
+    try:
+        data = request.get_json()
+        raw_url = data.get('url', '').strip()
+        quality = data.get('quality', 'max')
+
+        if not raw_url:
+            return jsonify({"success": False, "error": "⚠️ Please provide a valid link!"})
+
+        is_audio = (quality == 'audio')
+        v_quality = quality if not is_audio else 'max'
+
+        payload = {
+            "url": raw_url,
+            "vQuality": v_quality,
+            "isAudioOnly": is_audio
+        }
+
+        apis = [
+            "https://api.cobalt.tools/api/json",
+            "https://co.wuk.sh/api/json"
+        ]
+
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        }
+
+        download_url = None
+        for api in apis:
+            try:
+                resp = requests.post(api, json=payload, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    res_data = resp.json()
+                    if res_data:
+                        if res_data.get('url'):
+                            download_url = res_data.get('url')
+                            break
+                        elif res_data.get('picker') and len(res_data.get('picker')) > 0:
+                            download_url = res_data['picker'][0].get('url')
+                            break
+                        elif res_data.get('status') == 'redirect' and res_data.get('url'):
+                            download_url = res_data.get('url')
+                            break
+            except Exception:
+                continue
+
+        if download_url:
+            return jsonify({"success": True, "download_url": download_url})
+        else:
+            return jsonify({"success": False, "error": "❌ Unable to fetch stream. The video might be private or restricted."})
+
+    except Exception as e:
+        return jsonify({"success": False, "error": "❌ Server processing error occurred."})
 
 @app.route('/admin/add-folder', methods=['POST'])
 def add_folder():
