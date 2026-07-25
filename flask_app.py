@@ -348,7 +348,10 @@ def send_welcome(message):
     bot.reply_to(message, "Salam! Niche diye gaye button par click karke Badass Tools Hub open karein:", reply_markup=markup)
     
 
-
+@app.route('/')
+def home():
+    return render_template('index.html')
+    
 import os
 
 if __name__ == '__main__':
