@@ -602,56 +602,70 @@ def api_extract():
         if not raw_url:
             return jsonify({"success": False, "error": "⚠️ Please provide a valid link!"})
 
-        # Safe and robust format selection for yt-dlp
-        if quality == 'audio':
-            format_selector = 'bestaudio/best'
-        elif quality == '360':
-            format_selector = 'best[height<=360]/best'
-        elif quality == '480':
-            format_selector = 'best[height<=480]/best'
-        elif quality == '720':
-            format_selector = 'best[height<=720]/best'
-        elif quality == '1080':
-            format_selector = 'best[height<=1080]/best'
-        elif quality == '1440':
-            format_selector = 'best[height<=1440]/best'
-        elif quality == '2160':
-            format_selector = 'best[height<=2160]/best'
-        else:
-            format_selector = 'best/bestvideo+bestaudio'
-
-        ydl_opts = {
-            'format': format_selector,
-            'quiet': True,
-            'no_warnings': True,
-            'ignoreerrors': True,
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
-        }
-
         download_url = None
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(raw_url, download=False)
-            if not info:
-                return jsonify({"success": False, "error": "❌ Failed to extract video info."})
-            
-            download_url = info.get('url')
-            
-            if not download_url and 'formats' in info:
-                formats = info['formats']
-                for f in reversed(formats):
-                    if f.get('url') and f.get('vcodec') != 'none':
-                        download_url = f.get('url')
-                        break
-                if not download_url and formats:
-                    download_url = formats[-1].get('url')
+
+        # Method 1: Try using yt-dlp with multiple client emulations
+        try:
+            if quality == 'audio':
+                format_selector = 'bestaudio/best'
+            elif quality == '360':
+                format_selector = 'best[height<=360]/best'
+            elif quality == '480':
+                format_selector = 'best[height<=480]/best'
+            elif quality == '720':
+                format_selector = 'best[height<=720]/best'
+            elif quality == '1080':
+                format_selector = 'best[height<=1080]/best'
+            elif quality == '1440':
+                format_selector = 'best[height<=1440]/best'
+            elif quality == '2160':
+                format_selector = 'best[height<=2160]/best'
+            else:
+                format_selector = 'best/bestvideo+bestaudio'
+
+            ydl_opts = {
+                'format': format_selector,
+                'quiet': True,
+                'no_warnings': True,
+                'ignoreerrors': True,
+                'extractor_args': {'youtube': {'player_client': ['android', 'web', 'mweb']}}
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(raw_url, download=False)
+                if info:
+                    download_url = info.get('url')
+                    if not download_url and 'formats' in info:
+                        for f in reversed(info['formats']):
+                            if f.get('url') and f.get('vcodec') != 'none':
+                                download_url = f.get('url')
+                                break
+        except Exception as e:
+            pass
+
+        # Method 2: Fallback to Cobweb / Cobalt public API if yt-dlp fails due to Railway IP block
+        if not download_url:
+            try:
+                headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+                }
+                payload = {'url': raw_url}
+                res = requests.post('https://co.wuk.sh/api/json', json=payload, headers=headers, timeout=10)
+                res_data = res.json()
+                if res_data.get('status') == 'redirect' or res_data.get('status') == 'stream':
+                    download_url = res_data.get('url')
+            except Exception as e:
+                pass
 
         if download_url:
             return jsonify({"success": True, "download_url": download_url})
         else:
-            return jsonify({"success": False, "error": "❌ Unable to fetch stream. Link might be restricted."})
+            return jsonify({"success": False, "error": "❌ YouTube is blocking cloud server requests. Try a different video link."})
 
     except Exception as e:
-        return jsonify({"success": False, "error": "❌ Extraction failed. Please try a different link."})
+        return jsonify({"success": False, "error": "❌ Extraction failed. Please try again."})
         
 @app.route('/admin/add-folder', methods=['POST'])
 def add_folder():
