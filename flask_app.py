@@ -10,6 +10,7 @@ import yt_dlp
 from urllib3.util import Retry
 from requests.adapters import HTTPAdapter
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for
+from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION & FIREWALL SHIELD ---
 TOKEN = "8781601945:AAG6Anvk8DaRZnhS5kNm61srVJec1-ECLcw"
@@ -618,7 +619,7 @@ def api_extract():
         download_url = None
         headers = {'User-Agent': random.choice(USER_AGENTS)}
 
-        # Engine 1: Secure Session API Fallback with dynamic headers
+        # Engine 1: Secure Session API Fallback
         try:
             api_endpoint = f"https://tikwm.com/api/?url={raw_url}"
             res = session.get(api_endpoint, headers=headers, timeout=8)
@@ -640,7 +641,7 @@ def api_extract():
             except:
                 pass
 
-        # Engine 3: yt-dlp deep multi-client spoofing
+        # Engine 3: yt-dlp multi-client spoofing fallback
         if not download_url:
             try:
                 time.sleep(0.5)
@@ -648,13 +649,35 @@ def api_extract():
                     'format': 'best/bestvideo+bestaudio',
                     'quiet': True,
                     'no_warnings': True,
-                    'extractor_args': {'youtube': {'player_client': ['ios', 'android', 'web']}}
+                    'extractor_args': {'youtube': {'player_client': ['android', 'web', 'mweb']}}
                 }
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(raw_url, download=False)
                     if info:
                         download_url = info.get('url')
             except:
+                pass
+
+        # Engine 4: Bulletproof Playwright Headless Browser Automation (Zero-Error Level)
+        if not download_url:
+            try:
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(
+                        headless=True,
+                        args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
+                    )
+                    context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+                    page = context.new_page()
+                    
+                    page.goto("https://en.savefrom.net/", timeout=15000)
+                    page.fill('input[type="text"]', raw_url)
+                    page.click('button#submit')
+                    
+                    page.wait_for_selector('.link-download', timeout=12000)
+                    download_url = page.get_attribute('.link-download', 'href')
+                    browser.close()
+            except Exception as e:
+                print(f"Playwright Automation Error: {e}")
                 pass
 
         if download_url:
