@@ -1,9 +1,10 @@
 import os
 import re
+import uuid
 import requests
 import telebot
+import yt_dlp
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for
-import uuid
 
 # --- CONFIGURATION ---
 TOKEN = "8781601945:AAG6Anvk8DaRZnhS5kNm61srVJec1-ECLcw"
@@ -421,7 +422,7 @@ HTML_TEMPLATE = """
 
             downloadBtn.disabled = true;
             downloadBtn.textContent = 'Processing...';
-            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Extracting stream link via Server...</div>';
+            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Extracting stream link via yt-dlp...</div>';
 
             try {
                 let response = await fetch('/api/extract', {
@@ -444,7 +445,7 @@ HTML_TEMPLATE = """
                             <a href="${data.download_url}" class="download-btn" target="_blank">⬇️ Download File Now</a>
                         </div>`;
                 } else {
-                    resultDiv.innerHTML = `<div class="error-box">${data.error || '❌ Unable to fetch stream. The link might be invalid or unsupported.'}</div>`;
+                    resultDiv.innerHTML = `<div class="error-box">${data.error || '❌ Unable to fetch stream.'}</div>`;
                 }
 
             } catch (err) {
@@ -580,52 +581,46 @@ def api_extract():
         if not raw_url:
             return jsonify({"success": False, "error": "⚠️ Please provide a valid link!"})
 
-        is_audio = (quality == 'audio')
-        v_quality = quality if not is_audio else 'max'
-
-        payload = {
-            "url": raw_url,
-            "vQuality": v_quality,
-            "isAudioOnly": is_audio
-        }
-
-        apis = [
-            "https://api.cobalt.tools/api/json",
-            "https://co.wuk.sh/api/json"
-        ]
-
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
+        # Configure yt-dlp options based on selected quality
+        if quality == 'audio':
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'quiet': True,
+                'no_warnings': True,
+            }
+        elif quality == '360':
+            ydl_opts = {'format': 'best[height<=360]/best', 'quiet': True, 'no_warnings': True}
+        elif quality == '480':
+            ydl_opts = {'format': 'best[height<=480]/best', 'quiet': True, 'no_warnings': True}
+        elif quality == '720':
+            ydl_opts = {'format': 'best[height<=720]/best', 'quiet': True, 'no_warnings': True}
+        elif quality == '1080':
+            ydl_opts = {'format': 'best[height<=1080]/best', 'quiet': True, 'no_warnings': True}
+        elif quality == '1440':
+            ydl_opts = {'format': 'best[height<=1440]/best', 'quiet': True, 'no_warnings': True}
+        elif quality == '2160':
+            ydl_opts = {'format': 'best[height<=2160]/best', 'quiet': True, 'no_warnings': True}
+        else:
+            ydl_opts = {'format': 'best/bestvideo+bestaudio', 'quiet': True, 'no_warnings': True}
 
         download_url = None
-        for api in apis:
-            try:
-                resp = requests.post(api, json=payload, headers=headers, timeout=10)
-                if resp.status_code == 200:
-                    res_data = resp.json()
-                    if res_data:
-                        if res_data.get('url'):
-                            download_url = res_data.get('url')
-                            break
-                        elif res_data.get('picker') and len(res_data.get('picker')) > 0:
-                            download_url = res_data['picker'][0].get('url')
-                            break
-                        elif res_data.get('status') == 'redirect' and res_data.get('url'):
-                            download_url = res_data.get('url')
-                            break
-            except Exception:
-                continue
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(raw_url, download=False)
+            download_url = info.get('url')
+            
+            if not download_url and 'formats' in info:
+                for f in reversed(info['formats']):
+                    if f.get('url'):
+                        download_url = f.get('url')
+                        break
 
         if download_url:
             return jsonify({"success": True, "download_url": download_url})
         else:
-            return jsonify({"success": False, "error": "❌ Unable to fetch stream. The video might be private or restricted."})
+            return jsonify({"success": False, "error": "❌ Unable to fetch stream. Direct link not found."})
 
     except Exception as e:
-        return jsonify({"success": False, "error": "❌ Server processing error occurred."})
+        return jsonify({"success": False, "error": "❌ Extraction failed. Please check the link."})
 
 @app.route('/admin/add-folder', methods=['POST'])
 def add_folder():
