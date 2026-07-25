@@ -1,4 +1,4 @@
-Import telebot
+import telebot
 from flask import Flask, render_template_string, request, jsonify
 import yt_dlp
 
