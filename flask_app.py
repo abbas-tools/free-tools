@@ -332,7 +332,6 @@ HTML_TEMPLATE = """
         <div class="subtitle">Ultimate Media Stream Grabber</div>
 
         <div class="banner-ad">
-            <!-- Strictly Sandboxed Isolated Frame loading separate safe route -->
             <iframe src="/banner-ad" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
         </div>
 
@@ -343,7 +342,7 @@ HTML_TEMPLATE = """
 
         <div id="downloader-tab" class="tab-content active">
             <div class="card">
-                <input type="text" id="videoUrl" placeholder="Paste YouTube link here...">
+                <input type="text" id="videoUrl" placeholder="Paste YouTube, FB, Insta, TikTok link...">
                 <select id="qualitySelect">
                     <option value="best" selected>🎬 Best Quality (Video)</option>
                     <option value="480">📱 480p (Medium)</option>
@@ -409,23 +408,56 @@ HTML_TEMPLATE = """
         }
 
         async function processDownload() {
-            let url = document.getElementById('videoUrl').value.trim();
+            let rawUrl = document.getElementById('videoUrl').value.trim();
             let quality = document.getElementById('qualitySelect').value;
             let resultDiv = document.getElementById('result');
             let downloadBtn = document.getElementById('downloadBtn');
 
-            if (!url) {
-                resultDiv.innerHTML = '<div class="error-box">⚠️ Please paste a valid YouTube link!</div>';
+            if (!rawUrl) {
+                resultDiv.innerHTML = '<div class="error-box">⚠️ Please paste a valid video link!</div>';
                 return;
+            }
+
+            // Universal Link Normalizer for YouTube, TikTok, Instagram, and Facebook
+            let formattedUrl = rawUrl;
+            
+            // YouTube Shorts / youtu.be fixing
+            if (rawUrl.includes('/shorts/')) {
+                let parts = rawUrl.split('/shorts/');
+                if (parts.length > 1) {
+                    let videoId = parts[1].split('?')[0];
+                    formattedUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                }
+            } else if (rawUrl.includes('youtu.be/')) {
+                let parts = rawUrl.split('youtu.be/');
+                if (parts.length > 1) {
+                    let videoId = parts[1].split('?')[0];
+                    formattedUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                }
+            } 
+            // TikTok short link handling (vm.tiktok.com)
+            else if (rawUrl.includes('vm.tiktok.com') || rawUrl.includes('vt.tiktok.com')) {
+                formattedUrl = rawUrl.split('?')[0];
+            }
+            // Instagram Reels cleanup
+            else if (rawUrl.includes('instagram.com/reel/')) {
+                let match = rawUrl.match(/\/reel\/([A-Za-z0-9_-]+)/);
+                if (match) {
+                    formattedUrl = `https://www.instagram.com/reel/${match[1]}/`;
+                }
+            }
+            // Facebook share / watch links
+            else if (rawUrl.includes('fb.watch') || rawUrl.includes('facebook.com')) {
+                formattedUrl = rawUrl.split('?')[0];
             }
 
             downloadBtn.disabled = true;
             downloadBtn.textContent = 'Processing...';
-            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Connecting via client IP...</div>';
+            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Extracting stream link...</div>';
 
             try {
                 let payload = {
-                    url: url,
+                    url: formattedUrl,
                     vQuality: quality === 'best' ? 'max' : quality,
                     isAudioOnly: quality === 'audio',
                     dubLang: false
@@ -475,7 +507,7 @@ HTML_TEMPLATE = """
                             <a href="${downloadUrl}" class="download-btn" target="_blank">⬇️ Download File Now</a>
                         </div>`;
                 } else {
-                    resultDiv.innerHTML = `<div class="error-box">❌ Unable to fetch stream. Please ensure the YouTube link is public and correct.</div>`;
+                    resultDiv.innerHTML = `<div class="error-box">❌ Unable to fetch stream. Please ensure the link is public and correct.</div>`;
                 }
 
             } catch (err) {
