@@ -17,7 +17,7 @@ UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Dictionary to hold players and their folders
+# Dictionary to hold players and their video folders
 CRICKET_DATABASE = {
     "babar-azam": {
         "name": "Babar Azam 👑",
@@ -42,7 +42,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Badass Tools Hub & Cricket Gallery</title>
+    <title>Badass Tools Hub & Cricket Videos</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -234,6 +234,7 @@ HTML_TEMPLATE = """
             margin-top: 10px;
             border: 1px solid rgba(255,0,0,0.2);
             color: #e84118;
+            font-size: 12px;
         }
         .download-btn {
             background: #00a8ff;
@@ -264,7 +265,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <h2>Badass Tools Hub ⚡</h2>
-        <div class="subtitle">Ultimate Media Downloader & Cricket Gallery</div>
+        <div class="subtitle">Ultimate Media Downloader & Cricket Videos</div>
 
         <div class="banner-ad">
             <script type="text/javascript">
@@ -281,7 +282,7 @@ HTML_TEMPLATE = """
 
         <div class="nav-tabs">
             <div class="nav-tab active" onclick="switchTab('downloader')">Downloader</div>
-            <div class="nav-tab" onclick="switchTab('cricket')">📁 Cricket Folders</div>
+            <div class="nav-tab" onclick="switchTab('cricket')">📁 Cricket Videos</div>
         </div>
 
         <div id="downloader-tab" class="tab-content active">
@@ -301,7 +302,7 @@ HTML_TEMPLATE = """
 
         <div id="cricket-tab" class="tab-content">
             <div class="card" style="max-height: 400px; overflow-y: auto;">
-                <h3 style="margin-top:0; font-size:15px; color:#ff4b2b;">📂 Players Gallery Folders</h3>
+                <h3 style="margin-top:0; font-size:15px; color:#ff4b2b;">📂 Cricket Video Folders</h3>
                 {% for key, profile in cricketers.items() %}
                 <div class="cricket-profile">
                     <h4><i class="fa-solid fa-folder-open" style="color:#f1c40f;"></i> {{ profile.name }}</h4>
@@ -371,8 +372,8 @@ HTML_TEMPLATE = """
                     let proxyLink = `/proxy-download?url=${encodeURIComponent(data.download_link)}&title=${encodeURIComponent(data.title)}&type=${data.type || 'video'}`;
                     resultDiv.innerHTML = `
                         <div class="success-box">
-                            <b style="color: #4cd137; font-size: 14px; display:block; margin-bottom:5px;">✅ ${data.title}</b>
-                            <div style="font-size: 12px; color: #aaa; margin: 5px 0;">📊 Quality: ${data.resolution} | 💾 Size: ${data.size}</div>
+                            <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ ${data.title}</b>
+                            <div style="font-size: 11px; color: #aaa; margin: 5px 0;">📊 Quality: ${data.resolution}</div>
                             <a href="${proxyLink}" class="download-btn">⬇️ Click to Save File</a>
                         </div>`;
                 } else {
@@ -561,7 +562,7 @@ def proxy_download():
         safe_filename = sanitize_filename(filename)
         extension = '.mp4' if media_type == 'video' else '.mp3'
         
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
         response = requests.get(video_url, headers=headers, stream=True, timeout=60, allow_redirects=True)
         response.raise_for_status()
         
@@ -595,6 +596,7 @@ def process_media():
             height = quality.replace('p', '')
             format_spec = f'bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]/best[height<={height}]/best'
         
+        # Enhanced options with web+mweb client rotation to bypass bot blocks
         ydl_opts = {
             'format': format_spec,
             'quiet': True,
@@ -602,7 +604,17 @@ def process_media():
             'nocheckcertificate': True,
             'source_address': '0.0.0.0',
             'socket_timeout': 30,
-            'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['mweb', 'android', 'web']
+                }
+            },
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-us,en;q=0.5',
+                'Sec-Fetch-Mode': 'navigate',
+            }
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -625,11 +637,13 @@ def process_media():
                 'title': info.get('title', 'Media File'),
                 'download_link': download_url,
                 'resolution': f"{quality}p" if quality not in ['best', 'audio'] else 'Best',
-                'size': 'Unknown',
                 'type': 'audio' if quality == 'audio' else 'video'
             })
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Error: {str(e)[:100]}'})
+        err_msg = str(e)
+        if "Sign in to confirm" in err_msg or "bot" in err_msg:
+            return jsonify({'success': False, 'message': 'YouTube bot check restriction. Try a different video link.'})
+        return jsonify({'success': False, 'message': f'Error: {err_msg[:90]}'})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
