@@ -1,0 +1,4 @@
+flask
+pyTelegramBotAPI
+yt_dlp
+gunicorn
