@@ -1,273 +1,538 @@
-from flask import Flask, request, jsonify, send_file
-import yt_dlp
 import os
-import tempfile
 import re
 import requests
+import telebot
+import yt_dlp
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, Response
+import uuid
 from urllib.parse import urlparse
-import time
-import hashlib
-import logging
 
+# --- CONFIGURATION ---
+TOKEN = "8781601945:AAG6Anvk8DaRZnhS5kNm61srVJec1-ECLcw"
+bot = telebot.TeleBot(TOKEN, threaded=False)
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+UPLOAD_FOLDER = 'static/uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Temporary directory for downloads
-TEMP_DIR = tempfile.mkdtemp()
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max
+CRICKET_DATABASE = {
+    "babar-azam": {
+        "name": "Babar Azam 👑",
+        "bio": "Master class cover drives and match-winning knocks.",
+        "videos": [
+            {"title": "Babar Azam Best Cover Drives", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+        ]
+    },
+    "virat-kohli": {
+        "name": "Virat Kohli 🔥",
+        "bio": "The Run Machine and chase master highlights.",
+        "videos": [
+            {"title": "Kohli Epic Chase Masterclass", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+        ]
+    },
+    "shaheen-afridi": {
+        "name": "Shaheen Afridi ⚡",
+        "bio": "First-over lethal swinging yorkers.",
+        "videos": [
+            {"title": "Shaheen Afridi First Over Wickets", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+        ]
+    }
+}
+
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badass Tools Hub & Cricket Arena</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: var(--tg-theme-bg-color, #121418);
+            --text-color: var(--tg-theme-text-color, #ffffff);
+            --card-bg: rgba(255, 255, 255, 0.04);
+            --btn-color: var(--tg-theme-button-color, #ff4b2b);
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: var(--text-color);
+            text-align: center;
+            padding: 10px;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+        .container {
+            max-width: 420px;
+            margin: auto;
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        h2 {
+            margin-bottom: 2px;
+            font-size: 24px;
+            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-bottom: 15px;
+        }
+        .nav-tabs {
+            display: flex;
+            justify-content: space-around;
+            background: rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 5px;
+            margin-bottom: 15px;
+        }
+        .nav-tab {
+            padding: 8px 15px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: 0.2s;
+        }
+        .nav-tab.active {
+            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+            color: #fff;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .card {
+            background-color: var(--card-bg);
+            padding: 18px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        input[type="text"], select, input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+            outline: none;
+        }
+        .btn {
+            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+            color: #ffffff;
+            border: none;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(255, 75, 43, 0.4);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 15px;
+            font-size: 14px;
+            word-break: break-all;
+            text-align: center;
+        }
+        .loader {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top: 3px solid #ff4b2b;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .cricket-profile {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+        .cricket-profile h4 {
+            margin: 0 0 5px 0;
+            color: #ff4b2b;
+        }
+        .cricket-profile p {
+            margin: 0 0 10px 0;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        .video-item {
+            font-size: 12px;
+            background: rgba(0,0,0,0.2);
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .video-item a {
+            color: #00a8ff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .banner-ad {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 15px;
+            min-height: 50px;
+            overflow: hidden;
+            border-radius: 8px;
+        }
+        .success-box {
+            background: rgba(0,255,0,0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid rgba(0,255,0,0.2);
+        }
+        .error-box {
+            background: rgba(255,0,0,0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid rgba(255,0,0,0.2);
+            color: #e84118;
+        }
+        .download-btn {
+            background: #00a8ff;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 6px;
+            display: inline-block;
+            font-weight: bold;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        .subscribe-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+            margin-top: 12px;
+            font-size: 13px;
+        }
+        .subscribe-box a {
+            color: #ff4b2b;
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Badass Tools Hub ⚡</h2>
+        <div class="subtitle">Ultimate Media Downloader & Cricket Vault</div>
+
+        <div class="banner-ad">
+            <script type="text/javascript">
+                atOptions = {
+                    'key' : '03b4a64917d99a52eb71ea7bea6414d6',
+                    'format' : 'iframe',
+                    'height' : 50,
+                    'width' : 320,
+                    'params' : {}
+                };
+            </script>
+            <script type="text/javascript" src="//www.highperformanceformat.com/03b4a64917d99a52eb71ea7bea6414d6/invoke.js"></script>
+        </div>
+
+        <div class="nav-tabs">
+            <div class="nav-tab active" onclick="switchTab('downloader')">Downloader</div>
+            <div class="nav-tab" onclick="switchTab('cricket')">Cricket Vault</div>
+            <div class="nav-tab" onclick="switchTab('upload')">Upload Video</div>
+        </div>
+
+        <div id="downloader-tab" class="tab-content active">
+            <div class="card">
+                <input type="text" id="videoUrl" placeholder="Paste video link here...">
+                <select id="qualitySelect">
+                    <option value="best">🎬 Best Quality (Video)</option>
+                    <option value="480" selected>📱 480p (Medium)</option>
+                    <option value="720">💻 720p (HD)</option>
+                    <option value="1080">🖥️ 1080p (Full HD)</option>
+                    <option value="audio">🎵 Audio Only (MP3/M4A)</option>
+                </select>
+                <button class="btn" id="downloadBtn" onclick="processDownload()">Download Now 🚀</button>
+                <div id="result"></div>
+            </div>
+        </div>
+
+        <div id="cricket-tab" class="tab-content">
+            <div class="card" style="max-height: 350px; overflow-y: auto;">
+                <h3 style="margin-top:0; font-size:16px; color:#ff4b2b;">🏏 Cricketers Profiles</h3>
+                {% for key, profile in cricketers.items() %}
+                <div class="cricket-profile">
+                    <h4>{{ profile.name }}</h4>
+                    <p>{{ profile.bio }}</p>
+                    <div style="font-size:11px; font-weight:bold; opacity:0.7;">Featured Videos:</div>
+                    {% for vid in profile.videos %}
+                    <div class="video-item">
+                        <span>{{ vid.title }}</span>
+                        <a href="{{ vid.url }}" target="_blank">Watch 🎬</a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div id="upload-tab" class="tab-content">
+            <div class="card">
+                <h3 style="margin-top:0; font-size:16px; color:#ff4b2b;">📤 Upload Cricket Video</h3>
+                <form action="/upload-video" method="POST" enctype="multipart/form-data">
+                    <select name="cricketer_key" required>
+                        <option value="">Select Cricketer Profile</option>
+                        {% for key, profile in cricketers.items() %}
+                        <option value="{{ key }}">{{ profile.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="video_title" placeholder="Enter Video Title..." required>
+                    <input type="file" name="video_file" accept="video/*" required>
+                    <button type="submit" class="btn">Upload to Vault 🚀</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="subscribe-box">
+            🎬 Subscribe Our Channel: <br>
+            <a href="https://www.youtube.com/@BadassToonsOfficial" target="_blank">Badass Toons Official ❤️</a>
+        </div>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            if(tabName === 'downloader') {
+                document.querySelectorAll('.nav-tab')[0].classList.add('active');
+                document.getElementById('downloader-tab').classList.add('active');
+            } else if(tabName === 'cricket') {
+                document.querySelectorAll('.nav-tab')[1].classList.add('active');
+                document.getElementById('cricket-tab').classList.add('active');
+            } else if(tabName === 'upload') {
+                document.querySelectorAll('.nav-tab')[2].classList.add('active');
+                document.getElementById('upload-tab').classList.add('active');
+            }
+        }
+
+        function processDownload() {
+            let url = document.getElementById('videoUrl').value.trim();
+            let quality = document.getElementById('qualitySelect').value;
+            let resultDiv = document.getElementById('result');
+            let downloadBtn = document.getElementById('downloadBtn');
+
+            if (!url) {
+                resultDiv.innerHTML = '<div class="error-box">⚠️ Please paste a valid video link!</div>';
+                return;
+            }
+
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = 'Processing...';
+            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px;">Fetching media stream...</div>';
+
+            fetch('/process-media', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url, quality: quality })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success) {
+                    let proxyLink = `/proxy-download?url=${encodeURIComponent(data.download_link)}&title=${encodeURIComponent(data.title)}&type=${data.type || 'video'}`;
+                    resultDiv.innerHTML = `
+                        <div class="success-box">
+                            <b style="color: #4cd137; font-size: 14px; display:block; margin-bottom:5px;">✅ ${data.title}</b>
+                            <div style="font-size: 12px; color: #aaa; margin: 5px 0;">📊 Quality: ${data.resolution} | 💾 Size: ${data.size}</div>
+                            <a href="${proxyLink}" class="download-btn">⬇️ Click to Save File</a>
+                        </div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error-box">❌ ${data.message}</div>`;
+                }
+            })
+            .catch(err => {
+                resultDiv.innerHTML = `<div class="error-box">❌ Network connection error!</div>`;
+            })
+            .finally(() => {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = 'Download Now 🚀';
+            });
+        }
+    </script>
+</body>
+</html>
+"""
+
+def is_valid_url(url):
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
+
+def sanitize_filename(filename):
+    filename = re.sub(r'[^\w\s-]', '', filename)
+    return re.sub(r'[-\s]+', '_', filename).strip()[:100]
+
+@app.route('/')
+def home():
+    return render_template_string(HTML_TEMPLATE, cricketers=CRICKET_DATABASE)
+
+@app.route('/upload-video', methods=['POST'])
+def upload_video():
+    try:
+        cricketer_key = request.form.get('cricketer_key')
+        video_title = request.form.get('video_title')
+        video_file = request.files.get('video_file')
+
+        if not cricketer_key or not video_file or cricketer_key not in CRICKET_DATABASE:
+            return redirect(url_for('home'))
+
+        filename = f"{uuid.uuid4().hex}_{sanitize_filename(video_file.filename)}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        video_file.save(file_path)
+        
+        CRICKET_DATABASE[cricketer_key]["videos"].append({
+            "title": video_title,
+            "url": f"/static/uploads/{filename}"
+        })
+        return redirect(url_for('home'))
+    except Exception as e:
+        return redirect(url_for('home'))
+
+@app.route('/proxy-download')
+def proxy_download():
+    try:
+        video_url = request.args.get('url')
+        filename = request.args.get('title', 'video')
+        media_type = request.args.get('type', 'video')
+        
+        if not video_url:
+            return "URL is required", 400
+        
+        if '%' in video_url:
+            video_url = requests.utils.unquote(video_url)
+            
+        safe_filename = sanitize_filename(filename)
+        extension = '.mp4' if media_type == 'video' else '.mp3'
+        
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36'}
+        response = requests.get(video_url, headers=headers, stream=True, timeout=60, allow_redirects=True)
+        response.raise_for_status()
+        
+        def generate():
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+                    
+        return Response(generate(), headers={
+            'Content-Disposition': f'attachment; filename="{safe_filename}{extension}"',
+            'Content-Type': response.headers.get('content-type', 'application/octet-stream')
+        })
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 @app.route('/process-media', methods=['POST'])
 def process_media():
-    """
-    Process media from any platform and provide download link or file
-    """
     try:
         data = request.json
-        if not data:
-            return jsonify({'success': False, 'message': 'Invalid JSON payload'}), 400
-        
         video_url = data.get('url', '').strip()
         quality = data.get('quality', 'best')
-        download_mode = data.get('download_mode', 'direct_link')
-        
-        if not video_url:
-            return jsonify({'success': False, 'message': 'URL is required'}), 400
-        
-        # Validate URL
-        try:
-            parsed = urlparse(video_url)
-            if not parsed.scheme or not parsed.netloc:
-                return jsonify({'success': False, 'message': 'Invalid URL format'}), 400
-        except Exception:
-            return jsonify({'success': False, 'message': 'Invalid URL format'}), 400
-        
-        logger.info(f"Processing media: {video_url}")
-        
-        # Configure yt-dlp options
-        ydl_opts = get_ytdl_options(quality)
-        
-        # Extract video info
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            try:
-                info = ydl.extract_info(video_url, download=False)
-                if not info:
-                    return jsonify({'success': False, 'message': 'Could not extract video information'}), 404
-                
-                # Get available formats
-                formats = info.get('formats', [])
-                available_qualities = []
-                for f in formats:
-                    height = f.get('height')
-                    if height:
-                        available_qualities.append(f"{height}p")
-                available_qualities = sorted(set(available_qualities), key=lambda x: int(x.replace('p', '')))
-                
-                # Extract download URL
-                download_url = None
-                if 'url' in info:
-                    download_url = info['url']
-                elif 'formats' in info and info['formats']:
-                    # Get the best format based on quality
-                    for f in reversed(info['formats']):
-                        if f.get('url'):
-                            download_url = f['url']
-                            break
-                
-                if not download_url:
-                    return jsonify({'success': False, 'message': 'No download URL found'}), 404
-                
-                # Get video details
-                title = info.get('title', 'Media File')
-                clean_title = re.sub(r'[^\w\s-]', '', title)
-                clean_title = re.sub(r'[-\s]+', '_', clean_title)
-                duration = info.get('duration', 0)
-                thumbnail = info.get('thumbnail', '')
-                
-                # Prepare response
-                response_data = {
-                    'success': True,
-                    'title': title,
-                    'download_link': download_url,
-                    'duration': duration,
-                    'thumbnail': thumbnail,
-                    'available_qualities': available_qualities,
-                    'quality_selected': quality,
-                    'filename': f"{clean_title}.mp4",
-                    'file_size': info.get('filesize', 0) or info.get('filesize_approx', 0),
-                }
-                
-                return jsonify(response_data)
-                
-            except yt_dlp.utils.DownloadError as e:
-                error_msg = str(e)
-                logger.error(f"Download error: {error_msg}")
-                
-                # Try alternative method for YouTube
-                if 'youtube' in video_url or 'youtu.be' in video_url:
-                    logger.info("Retrying with alternative YouTube settings...")
-                    alt_opts = get_alternative_ytdl_options()
-                    try:
-                        with yt_dlp.YoutubeDL(alt_opts) as ydl2:
-                            info = ydl2.extract_info(video_url, download=False)
-                            if info and info.get('url'):
-                                return jsonify({
-                                    'success': True,
-                                    'title': info.get('title', 'Media File'),
-                                    'download_link': info['url'],
-                                    'download_mode': 'direct_link'
-                                })
-                    except Exception as retry_error:
-                        logger.error(f"Retry failed: {str(retry_error)}")
-                        return jsonify({
-                            'success': False, 
-                            'message': f'Unable to download video. Error: {str(e)[:100]}'
-                        }), 500
-                
-                return jsonify({'success': False, 'message': f'Error: {str(e)[:150]}'}), 500
-                
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return jsonify({'success': False, 'message': f'Server error: {str(e)[:100]}'}), 500
 
-def get_ytdl_options(quality):
-    """Get yt-dlp options WITHOUT any proxy settings"""
-    common_headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Cache-Control': 'max-age=0',
-    }
-    
-    # Base options - NO PROXY
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'nocheckcertificate': True,
-        'geo_bypass': True,
-        'http_headers': common_headers,
-        'ignoreerrors': True,
-        'extract_flat': False,
-        'retries': 10,  # More retries
-        'fragment_retries': 10,
-        'socket_timeout': 30,
-        'cookiefile': None,  # Disable cookies
-        'proxy': '',  # Explicitly set empty proxy
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web'],
-                'skip': ['dash', 'hls'],
-                'player_skip': ['configs'],
-                'no_live': ['true'],
-            },
-            'generic': {
-                'no_live': ['true']
-            }
-        }
-    }
-    
-    # Quality settings
-    if quality == 'audio':
-        ydl_opts['format'] = 'bestaudio/best'
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }]
-    elif quality == 'best':
-        ydl_opts['format'] = 'bestvideo+bestaudio/best'
-    elif quality == 'worst':
-        ydl_opts['format'] = 'worst'
-    else:
-        # Handle quality like '1080p', '720p', etc.
-        q_val = quality.replace("p", "")
-        if q_val.isdigit():
-            ydl_opts['format'] = f'bestvideo[height<={q_val}]+bestaudio/best[height<={q_val}]/best'
+        if not video_url or not is_valid_url(video_url):
+            return jsonify({'success': False, 'message': 'Invalid URL format'})
+
+        if quality == 'audio':
+            format_spec = 'bestaudio/best'
+        elif quality == 'best':
+            format_spec = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
         else:
-            ydl_opts['format'] = 'best'
-    
-    return ydl_opts
-
-def get_alternative_ytdl_options():
-    """Alternative options for YouTube without proxy"""
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    }
-    
-    return {
-        'quiet': True,
-        'no_warnings': True,
-        'nocheckcertificate': True,
-        'geo_bypass': True,
-        'http_headers': headers,
-        'proxy': '',  # No proxy
-        'ignoreerrors': True,
-        'retries': 5,
-        'format': 'best',
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios'],
-                'skip': ['hls'],
-                'no_live': ['true'],
-            }
-        }
-    }
-
-@app.route('/download-file', methods=['GET'])
-def download_file():
-    """Download a previously processed file"""
-    url = request.args.get('url')
-    if not url:
-        return jsonify({'success': False, 'message': 'URL is required'}), 400
-    
-    try:
-        # Download and serve the file directly
+            height = quality.replace('p', '')
+            format_spec = f'bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]/best[height<={height}]/best'
+        
         ydl_opts = {
+            'format': format_spec,
             'quiet': True,
             'no_warnings': True,
-            'proxy': '',  # No proxy
-            'format': 'best',
+            'nocheckcertificate': True,
+            'source_address': '0.0.0.0', # Fixes tunnel connection error
+            'socket_timeout': 30,
+            'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
         }
-        
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+            info = ydl.extract_info(video_url, download=False)
+            if not info:
+                return jsonify({'success': False, 'message': 'Could not extract video info'})
             
-            if os.path.exists(filename):
-                return send_file(
-                    filename,
-                    as_attachment=True,
-                    download_name=os.path.basename(filename)
-                )
-            else:
-                return jsonify({'success': False, 'message': 'File not found'}), 404
-                
+            download_url = info.get('url')
+            if not download_url and info.get('formats'):
+                for f in info.get('formats', []):
+                    if f.get('ext') in ['mp4', 'm4a'] and f.get('url'):
+                        download_url = f.get('url')
+                        break
+            
+            if not download_url:
+                return jsonify({'success': False, 'message': 'No downloadable URL found'})
+            
+            return jsonify({
+                'success': True,
+                'title': info.get('title', 'Media File'),
+                'download_link': download_url,
+                'resolution': f"{quality}p" if quality not in ['best', 'audio'] else 'Best',
+                'size': 'Unknown',
+                'type': 'audio' if quality == 'audio' else 'video'
+            })
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': f'Error: {str(e)[:100]}'})
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'temp_directory': TEMP_DIR,
-        'temp_files': len(os.listdir(TEMP_DIR)) if os.path.exists(TEMP_DIR) else 0
-    })
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        update = telebot.types.Update.de_json(request.get_data().decode('utf-8'))
+        bot.process_new_updates([update])
+        return "OK", 200
+    return "Forbidden", 403
 
-if __name__ == '__main__':
-    # Create temp directory if it doesn't exist
-    os.makedirs(TEMP_DIR, exist_ok=True)
-    
-    # Run the app
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    web_app_url = "https://web-production-6836d.up.r
