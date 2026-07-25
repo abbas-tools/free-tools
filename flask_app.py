@@ -2,6 +2,9 @@ import telebot
 from flask import Flask, render_template_string, request, jsonify
 import yt_dlp
 
+TOKEN = "7831761974:AAHMaAAbtdk5v78vIkbxJmrStBzr1-1T1Uw"
+bot = telebot.TeleBot(TOKEN, threaded=False)
+
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
