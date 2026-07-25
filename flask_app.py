@@ -266,23 +266,38 @@ def process_media():
         return jsonify({'success': False, 'message': 'URL is required'})
 
     try:
+        # --- Yahan par ydl_opts mein headers aur bypass options add karne hain ---
+        common_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+
         if quality == 'audio':
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'quiet': True,
                 'no_warnings': True,
+                'nocheckcertificate': True,
+                'geo_bypass': True,
+                'http_headers': common_headers,
             }
         elif quality == 'best':
             ydl_opts = {
                 'format': 'best',
                 'quiet': True,
                 'no_warnings': True,
+                'nocheckcertificate': True,
+                'geo_bypass': True,
+                'http_headers': common_headers,
             }
         else:
             ydl_opts = {
                 'format': f'best[height<={quality}]/best' if quality.isdigit() else f'best[height<={quality.replace("p","")}]/best',
                 'quiet': True,
                 'no_warnings': True,
+                'nocheckcertificate': True,
+                'geo_bypass': True,
+                'http_headers': common_headers,
             }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -290,6 +305,17 @@ def process_media():
             download_url = info.get('url')
             title = info.get('title', 'Media File')
 
+        if not download_url:
+            return jsonify({'success': False, 'message': 'Could not extract direct link for this quality.'})
+
+        return jsonify({
+            'success': True,
+            'title': title,
+            'download_link': download_url
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)[:120]})
+        
         if not download_url:
             return jsonify({'success': False, 'message': 'Could not extract direct link for this quality.'})
 
@@ -317,12 +343,13 @@ def webhook():
 # --- TELEGRAM BOT COMMANDS ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    web_app_url = "https://web-production-6836d.up.railway.app/](https://web-production-6836d.up.railway.app/"
+    web_app_url = "https://web-production-6836d.up.railway.app/"
 
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("⚡ Open Badass Tools Hub", web_app=telebot.types.WebAppInfo(url=web_app_url)))
 
     bot.reply_to(message, "Salam! Niche diye gaye button par click karke Badass Tools Hub open karein:", reply_markup=markup)
+    
 
 
 import os
