@@ -3,7 +3,7 @@ import re
 import requests
 import telebot
 import yt_dlp
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, Response
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, Response, request_started
 import uuid
 from urllib.parse import urlparse
 
@@ -260,12 +260,28 @@ HTML_TEMPLATE = """
             text-decoration: none;
             font-weight: bold;
         }
+        .social-icons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 12px;
+            font-size: 20px;
+        }
+        .social-icons a {
+            color: #fff;
+            opacity: 0.8;
+            transition: 0.2s;
+        }
+        .social-icons a:hover {
+            opacity: 1;
+            color: #ff4b2b;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>Badass Tools Hub ⚡</h2>
-        <div class="subtitle">Ultimate Media Downloader & Cricket Videos</div>
+        <div class="subtitle">Ultimate Media Downloader</div>
 
         <div class="banner-ad">
             <script type="text/javascript">
@@ -326,6 +342,12 @@ HTML_TEMPLATE = """
         <div class="subscribe-box">
             🎬 Subscribe Our Channel: <br>
             <a href="https://www.youtube.com/@BadassToonsOfficial" target="_blank">Badass Toons Official ❤️</a>
+            <div class="social-icons">
+                <a href="https://youtube.com/@BadassToonsOfficial" target="_blank"><i class="fab fa-youtube"></i></a>
+                <a href="#" target="_blank"><i class="fab fa-instagram"></i></a>
+                <a href="#" target="_blank"><i class="fab fa-facebook"></i></a>
+                <a href="#" target="_blank"><i class="fab fa-tiktok"></i></a>
+            </div>
         </div>
     </div>
 
@@ -359,7 +381,7 @@ HTML_TEMPLATE = """
 
             downloadBtn.disabled = true;
             downloadBtn.textContent = 'Processing...';
-            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px;">Fetching media stream...</div>';
+            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Fetching media stream...</div>';
 
             fetch('/process-media', {
                 method: 'POST',
@@ -596,13 +618,12 @@ def process_media():
             height = quality.replace('p', '')
             format_spec = f'bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]/best[height<={height}]/best'
         
-        # Enhanced options with web+mweb client rotation to bypass bot blocks
+        # Clean yt-dlp config without faulty proxy bindings
         ydl_opts = {
             'format': format_spec,
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
-            'source_address': '0.0.0.0',
             'socket_timeout': 30,
             'extractor_args': {
                 'youtube': {
@@ -613,7 +634,6 @@ def process_media():
                 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-us,en;q=0.5',
-                'Sec-Fetch-Mode': 'navigate',
             }
         }
 
@@ -642,7 +662,7 @@ def process_media():
     except Exception as e:
         err_msg = str(e)
         if "Sign in to confirm" in err_msg or "bot" in err_msg:
-            return jsonify({'success': False, 'message': 'YouTube bot check restriction. Try a different video link.'})
+            return jsonify({'success': False, 'message': 'YouTube bot restriction. Try a different link.'})
         return jsonify({'success': False, 'message': f'Error: {err_msg[:90]}'})
 
 @app.route(f'/{TOKEN}', methods=['POST'])
@@ -655,9 +675,13 @@ def webhook():
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    web_app_url = "https://web-production-6836d.up.railway.app/"
+    # Automatically detects host domain or falls back to standard Railway app link
+    host_url = request.host_url if hasattr(request, 'host_url') and request.host_url else "https://web-production-6836d.up.railway.app/"
+    if not host_url.startswith('http'):
+        host_url = "https://" + host_url
+        
     markup = telebot.types.InlineKeyboardMarkup()
-    markup.add(telebot.types.InlineKeyboardButton("⚡ Open Badass Tools Hub", web_app=telebot.types.WebAppInfo(url=web_app_url)))
+    markup.add(telebot.types.InlineKeyboardButton("⚡ Open Badass Tools Hub", web_app=telebot.types.WebAppInfo(url=host_url)))
     bot.reply_to(message, "Assalamu Alaikum! 🎯 Click below to open app:", reply_markup=markup)
 
 if __name__ == '__main__':
