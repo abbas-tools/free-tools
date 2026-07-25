@@ -609,20 +609,21 @@ def process_media():
         if not video_url or not is_valid_url(video_url):
             return jsonify({'success': False, 'message': 'Invalid URL format'})
 
-        # Using Cobalt public API service to completely bypass server-side IP bot blocks from YouTube
-        api_payload = {
-            "url": video_url,
-            "vQuality": "1080" if quality == "1080" else ("720" if quality == "720" else "480"),
-            "isAudioOnly": True if quality == "audio" else False
-        }
-        
+        # Alternative robust public API extraction
+        api_payload = {"url": video_url}
         api_headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         }
 
-        response = requests.post("https://api.cobalt.tools/api/json", json=api_payload, headers=api_headers, timeout=20)
+        # Using alternative loader endpoint
+        response = requests.post("https://co.wuk.sh/api/json", json=api_payload, headers=api_headers, timeout=20)
+        
+        if response.status_code != 200:
+            # Fallback backup public instance
+            response = requests.post("https://api.cobalt.tools/api/json", json=api_payload, headers=api_headers, timeout=20)
+
         res_json = response.json()
 
         if response.status_code == 200 and ('url' in res_json or 'picker' in res_json):
@@ -633,7 +634,7 @@ def process_media():
             if download_url:
                 return jsonify({
                     'success': True,
-                    'title': 'YouTube Media File',
+                    'title': res_json.get('filename', 'YouTube Media File'),
                     'download_link': download_url,
                     'resolution': quality.upper(),
                     'type': 'audio' if quality == 'audio' else 'video'
