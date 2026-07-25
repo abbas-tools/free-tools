@@ -535,4 +535,11 @@ def webhook():
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    web_app_url = "https://web-production-6836d.up.r
+    web_app_url = "https://web-production-6836d.up.railway.app/"
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.add(telebot.types.InlineKeyboardButton("⚡ Open Badass Tools Hub", web_app=telebot.types.WebAppInfo(url=web_app_url)))
+    bot.reply_to(message, "Assalamu Alaikum! 🎯 Click below to open app:", reply_markup=markup)
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port,
