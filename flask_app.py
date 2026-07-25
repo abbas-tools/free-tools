@@ -262,12 +262,11 @@ def process_media():
         return jsonify({'success': False, 'message': 'URL is required'})
 
     try:
-                common_headers = {
+        common_headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
         }
 
-        # YouTube client override taaki bot detection bypass ho jaye
         ext_args = {
             'youtube': {
                 'player_client': ['android']
@@ -304,7 +303,7 @@ def process_media():
                 'http_headers': common_headers,
                 'extractor_args': ext_args,
             }
-            
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
             download_url = info.get('url')
