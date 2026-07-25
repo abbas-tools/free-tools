@@ -447,5 +447,7 @@ def clear_cache():
     return jsonify({'success': True, 'message': 'Cache cleared'})
 
 if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
     os.makedirs(TEMP_DIR, exist_ok=True)
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    
