@@ -273,9 +273,10 @@ def process_media():
             'Accept-Language': 'en-US,en;q=0.9',
         }
 
+        # Yeh raha naya ext_args jisme android, ios aur web teeno shamil hain
         ext_args = {
             'youtube': {
-                'player_client': ['android']
+                'player_client': ['android', 'ios', 'web']
             }
         }
 
@@ -325,6 +326,7 @@ def process_media():
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)[:120]})
+        
         
 # --- TELEGRAM WEBHOOK ENDPOINT (24/7 Background Handler) ---
 @app.route(f'/{TOKEN}', methods=['POST'])
