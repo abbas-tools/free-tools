@@ -1,7 +1,5 @@
-Flask
+flask
 flask-cors
 requests
-TeleBot
+telebot
 yt-dlp
-aiohttp
-aiofiles
