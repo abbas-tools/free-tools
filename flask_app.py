@@ -317,7 +317,7 @@ def webhook():
 # --- TELEGRAM BOT COMMANDS ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    web_app_url = "https://Babache007.pythonanywhere.com/"
+    web_app_url = "https://web-production-6836d.up.railway.app/](https://web-production-6836d.up.railway.app/"
 
     markup = telebot.types.InlineKeyboardMarkup()
     markup.add(telebot.types.InlineKeyboardButton("⚡ Open Badass Tools Hub", web_app=telebot.types.WebAppInfo(url=web_app_url)))
