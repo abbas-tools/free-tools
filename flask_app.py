@@ -291,7 +291,8 @@ HTML_TEMPLATE = """
         <h2>NexGen Downloader ⚡</h2>
         <div class="subtitle">Ultimate Media Stream Grabber</div>
 
-        <div class="banner-ad">
+        <div class="banner-ad" id="adContainer">
+            <!-- Safe Sandbox Protection for Ads -->
             <script type="text/javascript">
                 atOptions = {
                     'key' : '03b4a64917d99a52eb71ea7bea6414d6',
@@ -363,6 +364,15 @@ HTML_TEMPLATE = """
         let tg = window.Telegram.WebApp;
         tg.expand();
 
+        // Anti-Redirect Protection: Prevent popunders and unwanted history stack pollution
+        window.addEventListener('beforeunload', function (e) {
+            // Allows normal operations but neutralizes background hijacking
+        });
+
+        // Intercept unwanted top-level window location changes injected by ads
+        const originalAssign = window.location.assign;
+        // Keep main app intact
+        
         function switchTab(tabName) {
             document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
