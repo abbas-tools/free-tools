@@ -325,5 +325,9 @@ def send_welcome(message):
     bot.reply_to(message, "Salam! Niche diye gaye button par click karke Badass Tools Hub open karein:", reply_markup=markup)
 
 
+import os
+
 if __name__ == '__main__':
-    app.run()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
+    
