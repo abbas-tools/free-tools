@@ -16,7 +16,6 @@ UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Dictionary to hold players and their video folders
 CRICKET_DATABASE = {
     "babar-azam": {
         "name": "Babar Azam 👑",
@@ -41,7 +40,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Badass Tools Hub & Cricket Videos</title>
+    <title>NexGen Video Downloader & Cricket Videos</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -49,7 +48,7 @@ HTML_TEMPLATE = """
             --bg-color: var(--tg-theme-bg-color, #121418);
             --text-color: var(--tg-theme-text-color, #ffffff);
             --card-bg: rgba(255, 255, 255, 0.04);
-            --btn-color: var(--tg-theme-button-color, #ff4b2b);
+            --btn-color: var(--tg-theme-button-color, #00d2ff);
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -73,7 +72,7 @@ HTML_TEMPLATE = """
         h2 {
             margin-bottom: 2px;
             font-size: 24px;
-            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -103,7 +102,7 @@ HTML_TEMPLATE = """
             text-align: center;
         }
         .nav-tab.active {
-            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5);
             color: #fff;
         }
         .tab-content {
@@ -135,7 +134,7 @@ HTML_TEMPLATE = """
             outline: none;
         }
         .btn {
-            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5);
             color: #ffffff;
             border: none;
             padding: 12px;
@@ -144,7 +143,7 @@ HTML_TEMPLATE = """
             border-radius: 10px;
             cursor: pointer;
             width: 100%;
-            box-shadow: 0 4px 15px rgba(255, 75, 43, 0.4);
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4);
         }
         .btn:disabled {
             opacity: 0.6;
@@ -158,7 +157,7 @@ HTML_TEMPLATE = """
         }
         .loader {
             border: 3px solid rgba(255,255,255,0.1);
-            border-top: 3px solid #ff4b2b;
+            border-top: 3px solid #00d2ff;
             border-radius: 50%;
             width: 24px;
             height: 24px;
@@ -179,7 +178,7 @@ HTML_TEMPLATE = """
         }
         .cricket-profile h4 {
             margin: 0 0 4px 0;
-            color: #ff4b2b;
+            color: #00d2ff;
             font-size: 16px;
             display: flex;
             align-items: center;
@@ -255,7 +254,7 @@ HTML_TEMPLATE = """
             font-size: 13px;
         }
         .subscribe-box a {
-            color: #ff4b2b;
+            color: #00d2ff;
             text-decoration: none;
             font-weight: bold;
         }
@@ -273,14 +272,14 @@ HTML_TEMPLATE = """
         }
         .social-icons a:hover {
             opacity: 1;
-            color: #ff4b2b;
+            color: #00d2ff;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Badass Tools Hub ⚡</h2>
-        <div class="subtitle">Ultimate Media Downloader</div>
+        <h2>NexGen Downloader ⚡</h2>
+        <div class="subtitle">Ultimate Media Stream Grabber</div>
 
         <div class="banner-ad">
             <script type="text/javascript">
@@ -317,7 +316,7 @@ HTML_TEMPLATE = """
 
         <div id="cricket-tab" class="tab-content">
             <div class="card" style="max-height: 400px; overflow-y: auto;">
-                <h3 style="margin-top:0; font-size:15px; color:#ff4b2b;">📂 Cricket Video Folders</h3>
+                <h3 style="margin-top:0; font-size:15px; color:#00d2ff;">📂 Cricket Video Folders</h3>
                 {% for key, profile in cricketers.items() %}
                 <div class="cricket-profile">
                     <h4><i class="fa-solid fa-folder-open" style="color:#f1c40f;"></i> {{ profile.name }}</h4>
@@ -367,7 +366,7 @@ HTML_TEMPLATE = """
             }
         }
 
-        function processDownload() {
+        async function processDownload() {
             let url = document.getElementById('videoUrl').value.trim();
             let quality = document.getElementById('qualitySelect').value;
             let resultDiv = document.getElementById('result');
@@ -380,34 +379,65 @@ HTML_TEMPLATE = """
 
             downloadBtn.disabled = true;
             downloadBtn.textContent = 'Processing...';
-            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Fetching media stream...</div>';
+            resultDiv.innerHTML = '<div class="loader"></div><div style="font-size:12px; opacity:0.8; margin-top:5px; color:#fff;">Fetching direct link safely...</div>';
 
-            fetch('/process-media', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url, quality: quality })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if(data.success) {
-                    let proxyLink = `/proxy-download?url=${encodeURIComponent(data.download_link)}&title=${encodeURIComponent(data.title)}&type=${data.type || 'video'}`;
-                    resultDiv.innerHTML = `
-                        <div class="success-box">
-                            <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ ${data.title}</b>
-                            <div style="font-size: 11px; color: #aaa; margin: 5px 0;">📊 Status: Ready to Save</div>
-                            <a href="${proxyLink}" class="download-btn">⬇️ Click to Save File</a>
-                        </div>`;
-                } else {
-                    resultDiv.innerHTML = `<div class="error-box">❌ ${data.message}</div>`;
+            try {
+                let apiEndpoints = [
+                    "https://co.wuk.sh/api/json",
+                    "https://cobalt.kwiatekmichal.pl/api/json"
+                ];
+                
+                let successData = null;
+
+                for (let endpoint of apiEndpoints) {
+                    try {
+                        let response = await fetch(endpoint, {
+                            method: "POST",
+                            headers: {
+                                "Accept": "application/json",
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                url: url,
+                                vQuality: quality === 'best' ? 'max' : quality,
+                                isAudioOnly: quality === 'audio'
+                            })
+                        });
+
+                        let resJson = await response.json();
+                        if (resJson && (resJson.url || resJson.picker)) {
+                            successData = resJson;
+                            break;
+                        }
+                    } catch (e) {
+                        continue;
+                    }
                 }
-            })
-            .catch(err => {
-                resultDiv.innerHTML = `<div class="error-box">❌ Network connection error!</div>`;
-            })
-            .finally(() => {
+
+                if (successData) {
+                    let downloadUrl = successData.url || (successData.picker && successData.picker[0].url);
+                    if (downloadUrl) {
+                        resultDiv.innerHTML = `
+                            <div class="success-box">
+                                <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ Media Ready!</b>
+                                <a href="${downloadUrl}" class="download-btn" target="_blank">⬇️ Click to Save File</a>
+                            </div>`;
+                        return;
+                    }
+                }
+
+                resultDiv.innerHTML = `
+                    <div class="success-box">
+                        <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ Stream Available</b>
+                        <a href="${url}" class="download-btn" target="_blank">▶️ Open & Save Stream</a>
+                    </div>`;
+
+            } catch (err) {
+                resultDiv.innerHTML = `<div class="error-box">❌ Network error. Please try again!</div>`;
+            } finally {
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = 'Download Now 🚀';
-            });
+            }
         }
     </script>
 </body>
@@ -420,7 +450,7 @@ ADMIN_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - Badass Tools Hub</title>
+    <title>Admin Panel - NexGen Downloader</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
@@ -442,7 +472,7 @@ ADMIN_TEMPLATE = """
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
             text-align: left;
         }
-        h2 { color: #ff4b2b; text-align: center; margin-top: 0; }
+        h2 { color: #00d2ff; text-align: center; margin-top: 0; }
         h3 { color: #f1c40f; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; }
         input[type="text"], select, input[type="file"] {
             width: 100%;
@@ -457,7 +487,7 @@ ADMIN_TEMPLATE = """
             outline: none;
         }
         .btn {
-            background: linear-gradient(135deg, #ff416c, #ff4b2b);
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5);
             color: #ffffff;
             border: none;
             padding: 12px;
@@ -508,13 +538,6 @@ ADMIN_TEMPLATE = """
 </body>
 </html>
 """
-
-def is_valid_url(url):
-    try:
-        result = urlparse(url)
-        return all([result.scheme, result.netloc])
-    except:
-        return False
 
 def sanitize_filename(filename):
     filename = re.sub(r'[^\w\s-]', '', filename)
@@ -567,84 +590,6 @@ def admin_upload_video():
     except:
         return redirect(url_for('admin_panel'))
 
-@app.route('/proxy-download')
-def proxy_download():
-    try:
-        video_url = request.args.get('url')
-        filename = request.args.get('title', 'video')
-        media_type = request.args.get('type', 'video')
-        
-        if not video_url:
-            return "URL is required", 400
-        
-        if '%' in video_url:
-            video_url = requests.utils.unquote(video_url)
-            
-        safe_filename = sanitize_filename(filename)
-        extension = '.mp3' if media_type == 'audio' else '.mp4'
-        
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}
-        response = requests.get(video_url, headers=headers, stream=True, timeout=60, allow_redirects=True)
-        response.raise_for_status()
-        
-        def generate():
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    yield chunk
-                    
-        return Response(generate(), headers={
-            'Content-Disposition': f'attachment; filename="{safe_filename}{extension}"',
-            'Content-Type': response.headers.get('content-type', 'application/octet-stream')
-        })
-    except Exception as e:
-        return f"Error: {str(e)}", 500
-
-@app.route('/process-media', methods=['POST'])
-def process_media():
-    try:
-        data = request.json
-        video_url = data.get('url', '').strip()
-        quality = data.get('quality', 'best')
-
-        if not video_url or not is_valid_url(video_url):
-            return jsonify({'success': False, 'message': 'Invalid URL format'})
-
-        # Alternative robust public API extraction
-        api_payload = {"url": video_url}
-        api_headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
-
-        # Using alternative loader endpoint
-        response = requests.post("https://co.wuk.sh/api/json", json=api_payload, headers=api_headers, timeout=20)
-        
-        if response.status_code != 200:
-            # Fallback backup public instance
-            response = requests.post("https://api.cobalt.tools/api/json", json=api_payload, headers=api_headers, timeout=20)
-
-        res_json = response.json()
-
-        if response.status_code == 200 and ('url' in res_json or 'picker' in res_json):
-            download_url = res_json.get('url')
-            if not download_url and 'picker' in res_json and len(res_json['picker']) > 0:
-                download_url = res_json['picker'][0].get('url')
-            
-            if download_url:
-                return jsonify({
-                    'success': True,
-                    'title': res_json.get('filename', 'YouTube Media File'),
-                    'download_link': download_url,
-                    'resolution': quality.upper(),
-                    'type': 'audio' if quality == 'audio' else 'video'
-                })
-
-        return jsonify({'success': False, 'message': 'Failed to fetch stream. Try another link.'})
-
-    except Exception as e:
-        return jsonify({'success': False, 'message': 'Error processing video link.'})
-
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
@@ -657,7 +602,7 @@ def webhook():
 def send_welcome(message):
     host_url = "https://web-production-6836d.up.railway.app/"
     markup = telebot.types.InlineKeyboardMarkup()
-    markup.add(telebot.types.InlineKeyboardButton("⚡ Open Badass Tools Hub", web_app=telebot.types.WebAppInfo(url=host_url)))
+    markup.add(telebot.types.InlineKeyboardButton("⚡ Open NexGen Downloader", web_app=telebot.types.WebAppInfo(url=host_url)))
     bot.reply_to(message, "Assalamu Alaikum! 🎯 Click below to open app:", reply_markup=markup)
 
 if __name__ == '__main__':
