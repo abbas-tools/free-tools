@@ -1,6 +1,7 @@
 import os
 import re
 import uuid
+import json
 import requests
 import telebot
 import yt_dlp
@@ -16,23 +17,41 @@ UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-CRICKET_DATABASE = {
-    "babar-azam": {
-        "name": "Babar Azam 👑",
-        "bio": "Master class cover drives and match-winning knocks.",
-        "videos": []
-    },
-    "virat-kohli": {
-        "name": "Virat Kohli 🔥",
-        "bio": "The Run Machine and chase master highlights.",
-        "videos": []
-    },
-    "shaheen-afridi": {
-        "name": "Shaheen Afridi ⚡",
-        "bio": "First-over lethal swinging yorkers.",
-        "videos": []
+DB_FILE = 'database.json'
+
+def load_database():
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "babar-azam": {
+            "name": "Babar Azam 👑",
+            "bio": "Master class cover drives and match-winning knocks.",
+            "videos": []
+        },
+        "virat-kohli": {
+            "name": "Virat Kohli 🔥",
+            "bio": "The Run Machine and chase master highlights.",
+            "videos": []
+        },
+        "shaheen-afridi": {
+            "name": "Shaheen Afridi ⚡",
+            "bio": "First-over lethal swinging yorkers.",
+            "videos": []
+        }
     }
-}
+
+def save_database(data):
+    try:
+        with open(DB_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except:
+        pass
+
+CRICKET_DATABASE = load_database()
 
 AD_FRAME_TEMPLATE = """
 <!DOCTYPE html>
@@ -561,7 +580,8 @@ def sanitize_filename(filename):
 
 @app.route('/')
 def home():
-    return render_template_string(HTML_TEMPLATE, cricketers=CRICKET_DATABASE)
+    db = load_database()
+    return render_template_string(HTML_TEMPLATE, cricketers=db)
 
 @app.route('/banner-ad')
 def banner_ad():
@@ -569,7 +589,8 @@ def banner_ad():
 
 @app.route('/admin-panel')
 def admin_panel():
-    return render_template_string(ADMIN_TEMPLATE, cricketers=CRICKET_DATABASE)
+    db = load_database()
+    return render_template_string(ADMIN_TEMPLATE, cricketers=db)
 
 @app.route('/api/extract', methods=['POST'])
 def api_extract():
@@ -581,13 +602,8 @@ def api_extract():
         if not raw_url:
             return jsonify({"success": False, "error": "⚠️ Please provide a valid link!"})
 
-        # Configure yt-dlp options based on selected quality
         if quality == 'audio':
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'quiet': True,
-                'no_warnings': True,
-            }
+            ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'no_warnings': True}
         elif quality == '360':
             ydl_opts = {'format': 'best[height<=360]/best', 'quiet': True, 'no_warnings': True}
         elif quality == '480':
@@ -629,12 +645,14 @@ def add_folder():
         bio = request.form.get('player_bio', '').strip()
         if name:
             key = sanitize_filename(name).lower()
-            if key not in CRICKET_DATABASE:
-                CRICKET_DATABASE[key] = {
+            db = load_database()
+            if key not in db:
+                db[key] = {
                     "name": name,
                     "bio": bio,
                     "videos": []
                 }
+                save_database(db)
         return redirect(url_for('admin_panel'))
     except:
         return redirect(url_for('admin_panel'))
@@ -646,17 +664,19 @@ def admin_upload_video():
         video_title = request.form.get('video_title')
         video_file = request.files.get('video_file')
 
-        if not cricketer_key or not video_file or cricketer_key not in CRICKET_DATABASE:
+        db = load_database()
+        if not cricketer_key or not video_file or cricketer_key not in db:
             return redirect(url_for('admin_panel'))
 
         filename = f"{uuid.uuid4().hex}_{sanitize_filename(video_file.filename)}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         video_file.save(file_path)
         
-        CRICKET_DATABASE[cricketer_key]["videos"].append({
+        db[cricketer_key]["videos"].append({
             "title": video_title,
             "url": f"/static/uploads/{filename}"
         })
+        save_database(db)
         return redirect(url_for('admin_panel'))
     except:
         return redirect(url_for('admin_panel'))
