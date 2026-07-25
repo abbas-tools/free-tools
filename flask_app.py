@@ -21,23 +21,17 @@ CRICKET_DATABASE = {
     "babar-azam": {
         "name": "Babar Azam 👑",
         "bio": "Master class cover drives and match-winning knocks.",
-        "videos": [
-            {"title": "Babar Azam Best Cover Drives", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
-        ]
+        "videos": []
     },
     "virat-kohli": {
         "name": "Virat Kohli 🔥",
         "bio": "The Run Machine and chase master highlights.",
-        "videos": [
-            {"title": "Kohli Epic Chase Masterclass", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
-        ]
+        "videos": []
     },
     "shaheen-afridi": {
         "name": "Shaheen Afridi ⚡",
         "bio": "First-over lethal swinging yorkers.",
-        "videos": [
-            {"title": "Shaheen Afridi First Over Wickets", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
-        ]
+        "videos": []
     }
 }
 
@@ -47,7 +41,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Badass Tools Hub & Cricket Arena</title>
+    <title>Badass Tools Hub & Cricket Gallery</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -97,8 +91,8 @@ HTML_TEMPLATE = """
             margin-bottom: 15px;
         }
         .nav-tab {
-            padding: 8px 15px;
-            font-size: 13px;
+            padding: 8px 12px;
+            font-size: 12px;
             font-weight: bold;
             color: #aaa;
             cursor: pointer;
@@ -177,32 +171,38 @@ HTML_TEMPLATE = """
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 12px;
             padding: 12px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             text-align: left;
         }
         .cricket-profile h4 {
-            margin: 0 0 5px 0;
+            margin: 0 0 4px 0;
             color: #ff4b2b;
+            font-size: 16px;
         }
         .cricket-profile p {
-            margin: 0 0 10px 0;
-            font-size: 12px;
+            margin: 0 0 8px 0;
+            font-size: 11px;
             opacity: 0.8;
         }
         .video-item {
             font-size: 12px;
-            background: rgba(0,0,0,0.2);
-            padding: 6px 10px;
-            border-radius: 6px;
-            margin-top: 5px;
+            background: rgba(0,0,0,0.3);
+            padding: 8px 10px;
+            border-radius: 8px;
+            margin-top: 6px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border: 1px solid rgba(255,255,255,0.05);
         }
         .video-item a {
-            color: #00a8ff;
+            background: #00a8ff;
+            color: white;
+            padding: 5px 12px;
             text-decoration: none;
+            border-radius: 6px;
             font-weight: bold;
+            font-size: 11px;
         }
         .banner-ad {
             display: flex;
@@ -257,7 +257,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <h2>Badass Tools Hub ⚡</h2>
-        <div class="subtitle">Ultimate Media Downloader & Cricket Vault</div>
+        <div class="subtitle">Ultimate Media Downloader & Cricket Gallery</div>
 
         <div class="banner-ad">
             <script type="text/javascript">
@@ -274,8 +274,8 @@ HTML_TEMPLATE = """
 
         <div class="nav-tabs">
             <div class="nav-tab active" onclick="switchTab('downloader')">Downloader</div>
-            <div class="nav-tab" onclick="switchTab('cricket')">Cricket Vault</div>
-            <div class="nav-tab" onclick="switchTab('upload')">Upload Video</div>
+            <div class="nav-tab" onclick="switchTab('cricket')">📁 Cricket Folders</div>
+            <div class="nav-tab" onclick="switchTab('upload')">📤 Upload Video</div>
         </div>
 
         <div id="downloader-tab" class="tab-content active">
@@ -294,19 +294,23 @@ HTML_TEMPLATE = """
         </div>
 
         <div id="cricket-tab" class="tab-content">
-            <div class="card" style="max-height: 350px; overflow-y: auto;">
-                <h3 style="margin-top:0; font-size:16px; color:#ff4b2b;">🏏 Cricketers Profiles</h3>
+            <div class="card" style="max-height: 380px; overflow-y: auto;">
+                <h3 style="margin-top:0; font-size:15px; color:#ff4b2b;">📂 Cricketer Gallery Folders</h3>
                 {% for key, profile in cricketers.items() %}
                 <div class="cricket-profile">
-                    <h4>{{ profile.name }}</h4>
+                    <h4>📁 {{ profile.name }}</h4>
                     <p>{{ profile.bio }}</p>
-                    <div style="font-size:11px; font-weight:bold; opacity:0.7;">Featured Videos:</div>
-                    {% for vid in profile.videos %}
-                    <div class="video-item">
-                        <span>{{ vid.title }}</span>
-                        <a href="{{ vid.url }}" target="_blank">Watch 🎬</a>
-                    </div>
-                    {% endfor %}
+                    <div style="font-size:11px; font-weight:bold; opacity:0.7; margin-bottom:4px;">Available Videos:</div>
+                    {% if profile.videos %}
+                        {% for vid in profile.videos %}
+                        <div class="video-item">
+                            <span style="max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🎬 {{ vid.title }}</span>
+                            <a href="{{ vid.url }}" download>⬇️ Download</a>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div style="font-size: 11px; opacity: 0.5; font-style: italic;">No videos uploaded in this folder yet.</div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -314,17 +318,17 @@ HTML_TEMPLATE = """
 
         <div id="upload-tab" class="tab-content">
             <div class="card">
-                <h3 style="margin-top:0; font-size:16px; color:#ff4b2b;">📤 Upload Cricket Video</h3>
+                <h3 style="margin-top:0; font-size:16px; color:#ff4b2b;">📤 Upload to Gallery Folder</h3>
                 <form action="/upload-video" method="POST" enctype="multipart/form-data">
                     <select name="cricketer_key" required>
-                        <option value="">Select Cricketer Profile</option>
+                        <option value="">Select Folder (Cricketer)</option>
                         {% for key, profile in cricketers.items() %}
-                        <option value="{{ key }}">{{ profile.name }}</option>
+                        <option value="{{ key }}">📁 {{ profile.name }}</option>
                         {% endfor %}
                     </select>
                     <input type="text" name="video_title" placeholder="Enter Video Title..." required>
                     <input type="file" name="video_file" accept="video/*" required>
-                    <button type="submit" class="btn">Upload to Vault 🚀</button>
+                    <button type="submit" class="btn">Upload to Folder 🚀</button>
                 </form>
             </div>
         </div>
@@ -494,7 +498,7 @@ def process_media():
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
-            'source_address': '0.0.0.0', # Fixes tunnel connection error
+            'source_address': '0.0.0.0',
             'socket_timeout': 30,
             'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
         }
@@ -543,4 +547,3 @@ def send_welcome(message):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-    
