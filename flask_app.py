@@ -302,6 +302,10 @@ class MultiEngineExtractor:
         
         return None
 
+@app.route('/')
+def home():
+    return "🚀 NexGen Media Downloader API is Live!"
+    
 @app.route('/process-media', methods=['POST'])
 def process_media():
     """Super fast media processing with multi-engine approach"""
