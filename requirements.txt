@@ -1,6 +1,7 @@
 Flask
-gunicorn
+flask-cors
 requests
 TeleBot
 yt-dlp
-playwright
+aiohttp
+aiofiles
