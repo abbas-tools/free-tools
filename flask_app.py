@@ -17,7 +17,7 @@ from urllib3.util.retry import Retry
 # ===============================
 
 TOKEN = "8781601945:AAG6Anvk8DaRZnhS5kNm61srVJec1-ECLcw"
-bot = telebot.TeleBot(TOKEN, threaded=False)
+bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
 app = Flask(__name__)
 CORS(app)
 app.secret_key = os.urandom(64)
