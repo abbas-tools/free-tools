@@ -390,7 +390,7 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-    <script>
+        <script>
         let tg = window.Telegram.WebApp;
         tg.expand();
 
@@ -418,37 +418,18 @@ HTML_TEMPLATE = """
                 return;
             }
 
-            // Universal Link Normalizer for YouTube, TikTok, Instagram, and Facebook
-            let formattedUrl = rawUrl;
+            // Advanced Universal Link Clean-up
+            let formattedUrl = rawUrl.split('?')[0]; // Query parameters hataane ke liye
             
-            // YouTube Shorts / youtu.be fixing
             if (rawUrl.includes('/shorts/')) {
-                let parts = rawUrl.split('/shorts/');
-                if (parts.length > 1) {
-                    let videoId = parts[1].split('?')[0];
-                    formattedUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                }
+                let match = rawUrl.match(/\/shorts\/([A-Za-z0-9_-]+)/);
+                if (match) formattedUrl = `https://www.youtube.com/watch?v=${match[1]}`;
             } else if (rawUrl.includes('youtu.be/')) {
-                let parts = rawUrl.split('youtu.be/');
-                if (parts.length > 1) {
-                    let videoId = parts[1].split('?')[0];
-                    formattedUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                }
-            } 
-            // TikTok short link handling (vm.tiktok.com)
-            else if (rawUrl.includes('vm.tiktok.com') || rawUrl.includes('vt.tiktok.com')) {
-                formattedUrl = rawUrl.split('?')[0];
-            }
-            // Instagram Reels cleanup
-            else if (rawUrl.includes('instagram.com/reel/')) {
+                let match = rawUrl.match(/youtu\.be\/([A-Za-z0-9_-]+)/);
+                if (match) formattedUrl = `https://www.youtube.com/watch?v=${match[1]}`;
+            } else if (rawUrl.includes('instagram.com/reel/')) {
                 let match = rawUrl.match(/\/reel\/([A-Za-z0-9_-]+)/);
-                if (match) {
-                    formattedUrl = `https://www.instagram.com/reel/${match[1]}/`;
-                }
-            }
-            // Facebook share / watch links
-            else if (rawUrl.includes('fb.watch') || rawUrl.includes('facebook.com')) {
-                formattedUrl = rawUrl.split('?')[0];
+                if (match) formattedUrl = `https://www.instagram.com/reel/${match[1]}/`;
             }
 
             downloadBtn.disabled = true;
@@ -459,13 +440,14 @@ HTML_TEMPLATE = """
                 let payload = {
                     url: formattedUrl,
                     vQuality: quality === 'best' ? 'max' : quality,
-                    isAudioOnly: quality === 'audio',
-                    dubLang: false
+                    isAudioOnly: quality === 'audio'
                 };
 
+                // Multiple backup APIs for robust extraction
                 let apis = [
                     "https://api.cobalt.tools/api/json",
-                    "https://co.wuk.sh/api/json"
+                    "https://co.wuk.sh/api/json",
+                    "https://cobalt.api.undenined.com/api/json"
                 ];
 
                 let downloadUrl = null;
@@ -476,27 +458,28 @@ HTML_TEMPLATE = """
                             method: "POST",
                             headers: {
                                 "Accept": "application/json",
-                                "Content-Type": "application/json",
-                                "User-Agent": navigator.userAgent
+                                "Content-Type": "application/json"
                             },
                             body: JSON.stringify(payload)
                         });
 
-                        let data = await response.json();
-                        if (data) {
-                            if (data.url) {
-                                downloadUrl = data.url;
-                                break;
-                            } else if (data.picker && data.picker.length > 0) {
-                                downloadUrl = data.picker[0].url;
-                                break;
-                            } else if (data.status === "redirect" && data.url) {
-                                downloadUrl = data.url;
-                                break;
+                        if (response.ok) {
+                            let data = await response.json();
+                            if (data) {
+                                if (data.url) {
+                                    downloadUrl = data.url;
+                                    break;
+                                } else if (data.picker && data.picker.length > 0) {
+                                    downloadUrl = data.picker[0].url;
+                                    break;
+                                } else if (data.status === "redirect" && data.url) {
+                                    downloadUrl = data.url;
+                                    break;
+                                }
                             }
                         }
-                    } catch (e) {
-                        continue;
+                    } catch (err) {
+                        continue; // Agli API try karega agar yeh fail hui
                     }
                 }
 
@@ -507,7 +490,7 @@ HTML_TEMPLATE = """
                             <a href="${downloadUrl}" class="download-btn" target="_blank">⬇️ Download File Now</a>
                         </div>`;
                 } else {
-                    resultDiv.innerHTML = `<div class="error-box">❌ Unable to fetch stream. Please ensure the link is public and correct.</div>`;
+                    resultDiv.innerHTML = `<div class="error-box">❌ Unable to fetch stream. The video might be private, geo-restricted, or unsupported.</div>`;
                 }
 
             } catch (err) {
