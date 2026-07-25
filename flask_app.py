@@ -304,7 +304,88 @@ class MultiEngineExtractor:
 
 @app.route('/')
 def home():
-    return "🚀 NexGen Media Downloader API is Live!"
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>NexGen Media Downloader</title>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+            .container { background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 100%; max-width: 500px; text-align: center; }
+            h1 { color: #38bdf8; margin-bottom: 10px; font-size: 24px; }
+            p { color: #94a3b8; font-size: 14px; margin-bottom: 25px; }
+            input, select { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #334155; background: #0f172a; color: #fff; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+            button { background: #0ea5e9; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+            button:hover { background: #0284c7; }
+            #result { margin-top: 20px; text-align: left; background: #0f172a; padding: 15px; border-radius: 8px; display: none; word-break: break-all; }
+            .loader { display: none; margin: 15px auto; border: 4px solid #334155; border-top: 4px solid #0ea5e9; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+    </main>
+    <body>
+        <div class="container">
+            <h1>🔥 NexGen Media Downloader</h1>
+            <p>Download videos from YouTube, Instagram, TikTok & more instantly!</p>
+            <input type="text" id="url" placeholder="Paste Video URL here...">
+            <select id="quality">
+                <option value="best">Best Quality</option>
+                <option value="audio">Audio Only (Best)</option>
+                <option value="1080p">1080p</option>
+                <option value="720p">720p</option>
+            </select>
+            <button onclick="processMedia()">Extract & Download</button>
+            <div class="loader" id="loader"></div>
+            <div id="result"></div>
+        </div>
+
+        <script>
+            async function processMedia() {
+                const url = document.getElementById('url').value;
+                const quality = document.getElementById('quality').value;
+                const resultDiv = document.getElementById('result');
+                const loader = document.getElementById('loader');
+
+                if (!url) {
+                    alert('Please enter a valid URL!');
+                    return;
+                }
+
+                loader.style.display = 'block';
+                resultDiv.style.display = 'none';
+                resultDiv.innerHTML = '';
+
+                try {
+                    const response = await fetch('/process-media', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: url, quality: quality })
+                    });
+                    const data = await response.json();
+                    loader.style.display = 'none';
+                    resultDiv.style.display = 'block';
+
+                    if (data.success) {
+                        resultDiv.innerHTML = `
+                            <b style="color: #38bdf8;">${data.title}</b><br><br>
+                            <a href="${data.download_link}" target="_blank" style="color: #4ade80; font-weight: bold; text-decoration: none;">📥 Click Here to Download File</a>
+                        `;
+                    } else {
+                        resultDiv.innerHTML = `<span style="color: #f87171;">Error: ${data.message}</span>`;
+                    }
+                } catch (err) {
+                    loader.style.display = 'none';
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `<span style="color: #f87171;">Request failed: ${err.message}</span>`;
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return render_template_string(html_content)
+    
     
 @app.route('/process-media', methods=['POST'])
 def process_media():
