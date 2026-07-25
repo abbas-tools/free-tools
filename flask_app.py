@@ -1,16 +1,21 @@
 import os
+import re
 import requests
 import telebot
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for
 import yt_dlp
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, send_file
+import tempfile
+import uuid
+from urllib.parse import urlparse, quote
+import mimetypes
 
 # --- CONFIGURATION ---
 TOKEN = "8781601945:AAG6Anvk8DaRZnhS5kNm61srVJec1-ECLcw"
 bot = telebot.TeleBot(TOKEN, threaded=False)
-
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
 
-# Directory for storing uploaded cricket videos locally or managing categories
+# Directory for storing uploaded cricket videos
 UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -161,6 +166,10 @@ HTML_TEMPLATE = """
         .btn:active {
             transform: scale(0.98);
         }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         #result {
             margin-top: 15px;
             font-size: 14px;
@@ -212,6 +221,9 @@ HTML_TEMPLATE = """
             text-decoration: none;
             font-weight: bold;
         }
+        .video-item a:hover {
+            text-decoration: underline;
+        }
         .banner-ad {
             display: flex;
             justify-content: center;
@@ -220,6 +232,51 @@ HTML_TEMPLATE = """
             min-height: 50px;
             overflow: hidden;
             border-radius: 8px;
+        }
+        .success-box {
+            background: rgba(0,255,0,0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid rgba(0,255,0,0.2);
+        }
+        .error-box {
+            background: rgba(255,0,0,0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid rgba(255,0,0,0.2);
+            color: #e84118;
+        }
+        .download-btn {
+            background: #00a8ff;
+            color: white;
+            padding: 8px 15px;
+            text-decoration: none;
+            border-radius: 6px;
+            display: inline-block;
+            font-weight: bold;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        .download-btn:hover {
+            background: #0097e6;
+        }
+        .subscribe-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+            margin-top: 12px;
+            font-size: 13px;
+        }
+        .subscribe-box a {
+            color: #ff4b2b;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .subscribe-box a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -251,7 +308,7 @@ HTML_TEMPLATE = """
         <!-- Tab 1: Downloader -->
         <div id="downloader-tab" class="tab-content active">
             <div class="card">
-                <input type="text" id="videoUrl" placeholder="Paste video link here...">
+                <input type="text" id="videoUrl" placeholder="Paste video link here (YouTube, Facebook, etc.)...">
                 <select id="qualitySelect">
                     <option value="best">🎬 Best Quality (Video)</option>
                     <option value="480">📱 480p (Medium)</option>
@@ -259,7 +316,7 @@ HTML_TEMPLATE = """
                     <option value="1080">🖥️ 1080p (Full HD)</option>
                     <option value="audio">🎵 Audio Only (MP3/M4A)</option>
                 </select>
-                <button class="btn" onclick="processDownload()">Download Now 🚀</button>
+                <button class="btn" id="downloadBtn" onclick="processDownload()">Download Now 🚀</button>
                 <div id="result"></div>
             </div>
         </div>
@@ -302,9 +359,9 @@ HTML_TEMPLATE = """
             </div>
         </div>
 
-        <div class="subscribe-box" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); padding: 10px; border-radius: 10px; margin-top: 12px; font-size: 13px;">
+        <div class="subscribe-box">
             🎬 Subscribe Our Channel: <br>
-            <a href="https://www.youtube.com/@BadassToonsOfficial" target="_blank" style="color: #ff4b2b; text-decoration: none; font-weight: bold;">Badass Toons Official ❤️</a>
+            <a href="https://www.youtube.com/@BadassToonsOfficial" target="_blank">Badass Toons Official ❤️</a>
         </div>
     </div>
 
@@ -332,12 +389,26 @@ HTML_TEMPLATE = """
             let url = document.getElementById('videoUrl').value.trim();
             let quality = document.getElementById('qualitySelect').value;
             let resultDiv = document.getElementById('result');
+            let downloadBtn = document.getElementById('downloadBtn');
 
             if (!url) {
-                tg.showAlert("Pehle koi valid link paste karein!");
+                tg.showAlert("Please paste a valid video link!");
+                resultDiv.innerHTML = '<div class="error-box">⚠️ Please paste a valid video link!</div>';
                 return;
             }
 
+            // Validate URL
+            try {
+                new URL(url);
+            } catch (e) {
+                tg.showAlert("Invalid URL format!");
+                resultDiv.innerHTML = '<div class="error-box">⚠️ Invalid URL format! Please check the link.</div>';
+                return;
+            }
+
+            // Disable button and show loading
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = 'Processing...';
             resultDiv.innerHTML = '<div class="loader"></div><span style="font-size:12px; opacity:0.8;">Fetching media stream...</span>';
 
             fetch('/process-media', {
@@ -349,25 +420,60 @@ HTML_TEMPLATE = """
             .then(data => {
                 if(data.success) {
                     let safeTitle = encodeURIComponent(data.title.replace(/[^a-zA-Z0-9]/g, '_'));
-                    let proxyLink = `/proxy-download?url=${encodeURIComponent(data.download_link)}&title=${safeTitle}`;
+                    let proxyLink = `/proxy-download?url=${encodeURIComponent(data.download_link)}&title=${safeTitle}&type=${data.type || 'video'}`;
                     
                     resultDiv.innerHTML = `
-                        <div style="background: rgba(0,255,0,0.1); padding: 10px; border-radius: 8px; margin-top: 10px; border: 1px solid rgba(0,255,0,0.2);">
-                            <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">${data.title}</b>
-                            <a href="${proxyLink}" style="background: #00a8ff; color: white; padding: 8px 15px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 13px;">Click to Save File 🚀</a>
+                        <div class="success-box">
+                            <b style="color: #4cd137; font-size: 13px; display:block; margin-bottom:5px;">✅ ${data.title}</b>
+                            <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">Quality: ${data.resolution || 'Best'} | Size: ${data.size || 'Unknown'}</div>
+                            <a href="${proxyLink}" class="download-btn" onclick="this.textContent='Downloading...'">Click to Save File 🚀</a>
                         </div>`;
                 } else {
-                    resultDiv.innerHTML = `<span style="color: #e84118; font-size: 13px;">Error: ${data.message}</span>`;
+                    resultDiv.innerHTML = `<div class="error-box">❌ Error: ${data.message}</div>`;
+                    tg.showAlert("Download failed: " + data.message);
                 }
             })
             .catch(err => {
-                resultDiv.innerHTML = `<span style="color: #e84118; font-size: 13px;">Network connection error!</span>`;
+                resultDiv.innerHTML = `<div class="error-box">❌ Network connection error! Please try again.</div>`;
+                tg.showAlert("Network error! Please check your connection.");
+            })
+            .finally(() => {
+                // Re-enable button
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = 'Download Now 🚀';
             });
         }
+
+        // Auto-detect URLs from clipboard
+        document.getElementById('videoUrl').addEventListener('paste', function(e) {
+            setTimeout(() => {
+                let url = this.value.trim();
+                if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+                    // Optional: Auto-process
+                }
+            }, 100);
+        });
     </script>
 </body>
 </html>
 """
+
+# --- HELPER FUNCTIONS ---
+def is_valid_url(url):
+    """Check if URL is valid"""
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
+
+def sanitize_filename(filename):
+    """Sanitize filename for safe download"""
+    # Remove invalid characters
+    filename = re.sub(r'[^\w\s-]', '', filename)
+    # Replace spaces with underscores
+    filename = re.sub(r'[-\s]+', '_', filename)
+    return filename.strip()
 
 # --- WEB APP ROUTES ---
 @app.route('/')
@@ -376,134 +482,307 @@ def home():
 
 @app.route('/upload-video', methods=['POST'])
 def upload_video():
-    cricketer_key = request.form.get('cricketer_key')
-    video_title = request.form.get('video_title')
-    video_file = request.files.get('video_file')
+    try:
+        cricketer_key = request.form.get('cricketer_key')
+        video_title = request.form.get('video_title')
+        video_file = request.files.get('video_file')
 
-    if cricketer_key and video_file and cricketer_key in CRICKET_DATABASE:
-        filename = video_file.filename
+        if not cricketer_key or not video_file or cricketer_key not in CRICKET_DATABASE:
+            return redirect(url_for('home'))
+
+        # Generate unique filename
+        filename = f"{uuid.uuid4().hex}_{sanitize_filename(video_file.filename)}"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         video_file.save(file_path)
         
         # Add file link into database category
-        file_url = f"/{file_path}"
+        file_url = f"/static/uploads/{filename}"
         CRICKET_DATABASE[cricketer_key]["videos"].append({
             "title": video_title,
             "url": file_url
         })
 
-    return redirect(url_for('home'))
+        return redirect(url_for('home'))
+    except Exception as e:
+        print(f"Upload error: {e}")
+        return redirect(url_for('home'))
 
 @app.route('/proxy-download')
 def proxy_download():
-    video_url = request.args.get('url')
-    filename = request.args.get('title', 'video') + '.mp4'
-    if not video_url:
-        return "URL is required", 400
-    
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        r = requests.get(video_url, headers=headers, stream=True)
+        video_url = request.args.get('url')
+        filename = request.args.get('title', 'video')
+        media_type = request.args.get('type', 'video')
         
+        if not video_url:
+            return "URL is required", 400
+        
+        # Decode URL if needed
+        if '%' in video_url:
+            video_url = requests.utils.unquote(video_url)
+        
+        # Check if URL is valid
+        if not is_valid_url(video_url):
+            return "Invalid URL", 400
+        
+        # Sanitize filename
+        safe_filename = sanitize_filename(filename)
+        extension = '.mp4' if media_type == 'video' else '.mp3'
+        full_filename = f"{safe_filename}{extension}"
+        
+        # Stream download with headers
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        
+        # Handle redirects
+        session = requests.Session()
+        session.max_redirects = 5
+        
+        response = session.get(video_url, headers=headers, stream=True, timeout=30)
+        response.raise_for_status()
+        
+        # Determine content type
+        content_type = response.headers.get('content-type', '')
+        if 'audio' in content_type:
+            full_filename = f"{safe_filename}.mp3"
+        elif 'video' in content_type:
+            full_filename = f"{safe_filename}.mp4"
+        
+        # Stream the file
         def generate():
-            for chunk in r.iter_content(chunk_size=4096):
-                yield chunk
-                
-        return app.response_class(generate(), headers={
-            'Content-Disposition': f'attachment; filename="{filename}"',
-            'Content-Type': r.headers.get('content-type', 'video/mp4')
-        })
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        
+        return app.response_class(
+            generate(),
+            headers={
+                'Content-Disposition': f'attachment; filename="{full_filename}"',
+                'Content-Type': content_type or 'application/octet-stream',
+                'Content-Length': response.headers.get('content-length'),
+                'Cache-Control': 'no-cache'
+            }
+        )
+    except requests.exceptions.Timeout:
+        return "Download timeout. Please try again.", 408
+    except requests.exceptions.RequestException as e:
+        return f"Download failed: {str(e)}", 500
     except Exception as e:
-        return str(e), 500
+        return f"Error: {str(e)}", 500
 
 @app.route('/process-media', methods=['POST'])
 def process_media():
-    data = request.json
-    video_url = data.get('url', '')
-    quality = data.get('quality', 'best')
-
-    if not video_url:
-        return jsonify({'success': False, 'message': 'URL is required'})
-
     try:
+        data = request.json
+        video_url = data.get('url', '').strip()
+        quality = data.get('quality', 'best')
+
+        if not video_url:
+            return jsonify({'success': False, 'message': 'URL is required'})
+        
+        if not is_valid_url(video_url):
+            return jsonify({'success': False, 'message': 'Invalid URL format'})
+
+        # Common headers for yt-dlp
         common_headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
         }
 
-        ext_args = {
-            'youtube': {
-                'player_client': ['android', 'ios', 'web']
-            }
-        }
-
+        # Configure yt-dlp options based on quality
         if quality == 'audio':
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'quiet': True,
                 'no_warnings': True,
                 'nocheckcertificate': True,
+                'ignoreerrors': True,
                 'geo_bypass': True,
                 'http_headers': common_headers,
-                'extractor_args': ext_args,
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'ios'],
+                        'skip': ['hls', 'dash']
+                    }
+                }
             }
         elif quality == 'best':
             ydl_opts = {
-                'format': 'best',
+                'format': 'bestvideo+bestaudio/best',
+                'merge_output_format': 'mp4',
                 'quiet': True,
                 'no_warnings': True,
                 'nocheckcertificate': True,
+                'ignoreerrors': True,
                 'geo_bypass': True,
                 'http_headers': common_headers,
-                'extractor_args': ext_args,
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'ios'],
+                        'skip': ['hls', 'dash']
+                    }
+                }
             }
         else:
-            ydl_opts = {
-                'format': f'best[height<={quality}]/best' if quality.isdigit() else f'best[height<={quality.replace("p","")}]/best',
-                'quiet': True,
-                'no_warnings': True,
-                'nocheckcertificate': True,
-                'geo_bypass': True,
-                'http_headers': common_headers,
-                'extractor_args': ext_args,
-            }
+            # For specific quality (480, 720, 1080)
+            quality_value = quality.replace('p', '')
+            if quality_value.isdigit():
+                height = int(quality_value)
+                ydl_opts = {
+                    'format': f'bestvideo[height<={height}]+bestaudio/best[height<={height}]/best',
+                    'merge_output_format': 'mp4',
+                    'quiet': True,
+                    'no_warnings': True,
+                    'nocheckcertificate': True,
+                    'ignoreerrors': True,
+                    'geo_bypass': True,
+                    'http_headers': common_headers,
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['android', 'ios'],
+                            'skip': ['hls', 'dash']
+                        }
+                    }
+                }
+            else:
+                # Fallback to best
+                ydl_opts = {
+                    'format': 'bestvideo+bestaudio/best',
+                    'merge_output_format': 'mp4',
+                    'quiet': True,
+                    'no_warnings': True,
+                    'nocheckcertificate': True,
+                    'ignoreerrors': True,
+                    'geo_bypass': True,
+                    'http_headers': common_headers
+                }
 
+        # Extract video info
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=False)
-            download_url = info.get('url')
-            title = info.get('title', 'Media File')
-
-        if not download_url:
-            return jsonify({'success': False, 'message': 'Could not extract direct link for this quality.'})
-
-        return jsonify({
-            'success': True,
-            'title': title,
-            'download_link': download_url
-        })
+            try:
+                info = ydl.extract_info(video_url, download=False)
+                if not info:
+                    return jsonify({'success': False, 'message': 'Could not extract video information'})
+                
+                # Get the best available URL
+                download_url = info.get('url')
+                if not download_url:
+                    # Try to get from formats
+                    formats = info.get('formats', [])
+                    if formats:
+                        # Get the format with highest quality
+                        best_format = max(formats, key=lambda f: f.get('height', 0) if f.get('height') else 0)
+                        download_url = best_format.get('url')
+                
+                if not download_url:
+                    return jsonify({'success': False, 'message': 'No downloadable URL found'})
+                
+                # Get title and metadata
+                title = info.get('title', 'Media File')
+                resolution = "Best"
+                if quality != 'best' and quality != 'audio':
+                    resolution = f"{quality}p"
+                elif quality == 'audio':
+                    resolution = "Audio Only"
+                
+                # Get file size if available
+                file_size = info.get('filesize')
+                if not file_size and formats:
+                    for fmt in formats:
+                        if fmt.get('url') == download_url and fmt.get('filesize'):
+                            file_size = fmt.get('filesize')
+                            break
+                
+                size_str = "Unknown"
+                if file_size:
+                    if file_size > 1024 * 1024 * 1024:
+                        size_str = f"{file_size / (1024*1024*1024):.2f} GB"
+                    elif file_size > 1024 * 1024:
+                        size_str = f"{file_size / (1024*1024):.2f} MB"
+                    else:
+                        size_str = f"{file_size / 1024:.2f} KB"
+                
+                return jsonify({
+                    'success': True,
+                    'title': title,
+                    'download_link': download_url,
+                    'resolution': resolution,
+                    'size': size_str,
+                    'type': 'audio' if quality == 'audio' else 'video'
+                })
+                
+            except yt_dlp.utils.DownloadError as e:
+                return jsonify({'success': False, 'message': f'Download error: {str(e)[:100]}'})
+            except Exception as e:
+                return jsonify({'success': False, 'message': f'Extraction error: {str(e)[:100]}'})
+                
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)[:120]})
-        
+        return jsonify({'success': False, 'message': f'Server error: {str(e)[:100]}'})
+
 # --- TELEGRAM WEBHOOK ENDPOINT ---
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return "OK", 200
-    else:
-        return "Forbidden", 403
+    try:
+        if request.headers.get('content-type') == 'application/json':
+            json_string = request.get_data().decode('utf-8')
+            update = telebot.types.Update.de_json(json_string)
+            if update:
+                bot.process_new_updates([update])
+            return "OK", 200
+        else:
+            return "Forbidden", 403
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return "Error", 500
 
 # --- TELEGRAM BOT COMMANDS ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    web_app_url = "https://web-production-6836d.up.railway.app/"
-    markup = telebot.types.InlineKeyboardMarkup()
-    markup.add(telebot.types.InlineKeyboardButton("⚡ Open Badass Tools Hub", web_app=telebot.types.WebAppInfo(url=web_app_url)))
-    bot.reply_to(message, "Salam! Niche diye gaye button par click karke Badass Tools Hub & Cricket Vault open karein:", reply_markup=markup)
+    try:
+        web_app_url = "https://web-production-6836d.up.railway.app/"
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.add(telebot.types.InlineKeyboardButton(
+            "⚡ Open Badass Tools Hub", 
+            web_app=telebot.types.WebAppInfo(url=web_app_url)
+        ))
+        bot.reply_to(
+            message, 
+            "Assalamu Alaikum! 🎯\n\nClick the button below to open Badass Tools Hub & Cricket Vault:", 
+            reply_markup=markup
+        )
+    except Exception as e:
+        print(f"Bot error: {e}")
+
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
+    try:
+        # Simple reply for any other messages
+        bot.reply_to(message, "Use the button above to open the Badass Tools Hub! 🚀")
+    except Exception as e:
+        print(f"Bot error: {e}")
+
+# --- ERROR HANDLERS ---
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
-    
+    try:
+        port = int(os.environ.get("PORT", 5000))
+        # Ensure upload directory exists
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        print(f"🚀 Server starting on port {port}")
+        print(f"📁 Upload directory: {UPLOAD_FOLDER}")
+        app.run(host='0.0.0.0', port=port, debug=False)
+    except Exception as e:
+        print(f"Failed to start server: {e}")
+        
