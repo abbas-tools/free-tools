@@ -3,3 +3,4 @@ flask-cors
 requests
 telebot
 yt-dlp
+gunicorn
