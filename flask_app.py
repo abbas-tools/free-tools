@@ -270,7 +270,7 @@ def process_media():
         # YouTube client override taaki bot detection bypass ho jaye
         ext_args = {
             'youtube': {
-                'player_client': ['android', 'web']
+                'player_client': ['android']
             }
         }
 
